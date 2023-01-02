@@ -1,7 +1,7 @@
-# SpotifyRecorder
+# Spotify-Recorder
 
 A replacement for ``spotify-ripper`` which is now  obsolete due to the sunset of the Spotify libraries (aka libspotify) for Windows/Linux.
-SpotifyRecorder provides 5 main functions:
+Spotify-Recorder provides 5 main functions:
 - Plays and records tracks, albums or playlists from Spotify using loopback audio devices
 - Encodes the recorded audio in PCM (WAV) IEEE-FLOAT format by default and in multiple other formats (FLAC, AAC, OPUS, MP3, VORBIS, AC3) on request
 - Generates filenames for the encode audio based on formatting rules, with ability to execute character replacements
@@ -9,8 +9,8 @@ SpotifyRecorder provides 5 main functions:
 - Generates relative or absolute playlists of existing or generated audio files e.g. for import on Android
 
 # Architecture
-SpotifyRecorder is implemented in Python, using classes and threads for parallel encoding and tagging.
-SpotifyRecorder makes limited use of Spotipy as it mostly uses its own code for interfacing with the Spotify Web based API.
+Spotify-Recorder is implemented in Python, using classes and threads for parallel encoding and tagging.
+Spotify-Recorder makes limited use of Spotipy as it mostly uses its own code for interfacing with the Spotify Web based API.
 Mutagen is used for tagging metadata.
 Pyaudiowpatch is used as stand-in for PyAudio as it provides better support for loopback devices.
 Psutil is used to increment the process priority
@@ -168,7 +168,7 @@ Here is an example config file
 
 # Formatting rules for filename, directories and path prefixes
 
-The format string dictates how ``SpotifyRecorder`` will organize your recorded files.  This is controlled through the ``-f | --filename`` option.  The string should include the format of the file name and optionally a directory structure.   If you do not include a format string, the default format will be used: ``{album_artist}/{album}/{artist} - {track_name}.{ext}``.
+The format string dictates how ``Spotify-Recorder`` will organize your recorded files.  This is controlled through the ``-f | --filename`` option.  The string should include the format of the file name and optionally a directory structure.   If you do not include a format string, the default format will be used: ``{album_artist}/{album}/{artist} - {track_name}.{ext}``.
 
 Additionally, you can now use a substring function.  The typical use case is to classify e.g. all artists in folders using the first digit of the artist name, converted to lower or upper case: ``{artist:1l}/{artist} - {track_name}.{ext}``
 Your format string can include the following variables names, which are case-sensitive and wrapped in curly braces, if you want your file/path name to be overwritten with Spotify metadata.
