@@ -8,6 +8,7 @@ from colorama import init, Fore, AnsiToWin32
 from lib.recorder import SportifyRecorder
 from lib.utils import *
 from lib.tags import cover_size_list
+from dotenv import load_dotenv
 import argparse
 import pkg_resources
 import schedule
@@ -29,6 +30,10 @@ class keyvalue(argparse.Action):
             getattr(namespace, self.dest)[key] = '='.join(data)     # assign into dictionary
 
 def load_config(defaults):
+    if not load_dotenv(): # load .env file in current directory
+        print(Fore.RED + "Could not locate .env file with Spotify API credentials or .env is empty" + Fore.RESET)
+        sys.exit(2)
+
     _settings_dir = settings_dir()
     config_file = os.path.join(_settings_dir, "config.ini")
     if os.path.exists(config_file):
