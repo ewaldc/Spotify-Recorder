@@ -427,17 +427,17 @@ def main(prog_args=sys.argv[1:]):
         elif args.ascii: return "ASCII only"
         else: return "Yes"
 
-    print(Fore.YELLOW + "  Unicode support:\t" + Fore.RESET + unicode_support_str())
-    print(Fore.YELLOW + "  Output directory:\t" + Fore.RESET + base_dir())
-    print(Fore.YELLOW + "  Settings directory:\t" + Fore.RESET + settings_dir())
+    print(Fore.YELLOW + "  Unicode support:\t\t" + Fore.RESET + unicode_support_str())
+    print(Fore.YELLOW + "  Output directory:\t\t" + Fore.RESET + base_dir())
+    print(Fore.YELLOW + "  Settings directory:\t\t" + Fore.RESET + settings_dir())
     print(Fore.YELLOW + "  Filename Format String:\t" + Fore.RESET + args.filename)
-    print(Fore.YELLOW + "  Overwrite files:\t" + Fore.RESET + ("Yes" if args.overwrite else "No"))
+    print(Fore.YELLOW + "  Overwrite files:\t\t" + Fore.RESET + ("Yes" if args.overwrite else "No"))
 
     # increase priority
     p = psutil.Process(os.getpid())
     if sys.platform.startswith("win"): p.nice(psutil.REALTIME_PRIORITY_CLASS) #HIGH_PRIORITY_CLASS
     else: os.nice(-20)
-    print(Fore.YELLOW + "  Process priority:\t" + Fore.RESET + str(p.nice()))
+    print(Fore.YELLOW + "  Process priority:\t\t" + Fore.RESET + str(p.nice()))
 
     # patch a bug when Python 3/MP4
     if sys.version_info >= (3, 0) : #and (args.output_type == "m4a" or args.output_type == "alac.m4a")

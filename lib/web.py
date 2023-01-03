@@ -30,10 +30,12 @@ SPOFITY_WEB_API_SCOPE = ' '.join([
 
 class WebAPI(object):
     def __init__(self, args, recorder):
-        def notEmpty(variable, msg):
-            if variable is None:
-                print(Fore.RED + msg + Fore.RESET);
+        def getEnvironmentVariable(name):
+            try: _value = os.environ[name]
+            except: 
+                print(Fore.RED + name + " is missing from .env file" + Fore.RESET);
                 sys.exit(3)
+            return _value
         self.args = args
         self.recorder = recorder
         self.cache = {
@@ -44,12 +46,9 @@ class WebAPI(object):
             "coverart": {},
             "tracks": {}
 		}
-        self.client_id = os.environ["SPOTIPY_CLIENT_ID"]
-        notEmpty(self.client_id, "SPOTIPY_CLIENT_ID is missing from .env file")
-        self.client_secret = os.environ["SPOTIPY_CLIENT_SECRET"]
-        notEmpty(self.client_secret, "SPOTIPY_CLIENT_SECRET is missing from .env file")
-        self.redirect_uri = os.environ["SPOTIPY_REDIRECT_URI"]
-        notEmpty(self.redirect_uri, "SPOTIPY_REDIRECT_URI is missing from .env file")
+        self.client_id = getEnvironmentVariable("SPOTIPY_CLIENT_ID")
+        self.client_secret = getEnvironmentVariable("SPOTIPY_CLIENT_SECRET")
+        self.redirect_uri = getEnvironmentVariable("SPOTIPY_REDIRECT_URI")
         cache_location = os.path.join(recorder.cache_location, 'spotipy_token.cache')
         self.cache_handler = spotipy.cache_handler.CacheFileHandler(cache_location)
         self.use_token_cache = True
@@ -62,7 +61,7 @@ class WebAPI(object):
         def is_none(device):
             if device is None or not device: 
                 print(Fore.RED + "No Spotify device found for this system. Is Spotify Player running ?" + Fore.RESET)
-                exit(1)
+                sys.exit(1)
         
         devices = self.spotify.devices()
         #devices = self.get_devices()
