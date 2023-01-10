@@ -41,7 +41,7 @@ Portable Python is also working, just ensure ``%APPDIR%\Python3\App\Python`` and
 Install ``Ffmpeg`` and make sure ffmpeg.exe is part of the PATH (edit environment variables e.g. ``%APPDIR%\AudioVideo\ffmpeg-5.1.2\bin``)
 Open a Python Shell (typically PowerShell):
 ```
-pip install mutagen, psutil, colorama, pyaudiowpatch, spotipy, python-dotenv
+pip install mutagen psutil colorama pyaudiowpatch spotipy python-dotenv
 ```
 Finally create a packaged Windows binary using ``pyinstaller`` in the current directory or directory of choice (distpath)
 ```
