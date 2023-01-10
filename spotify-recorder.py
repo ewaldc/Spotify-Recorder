@@ -511,5 +511,11 @@ def main(prog_args=sys.argv[1:]):
         if not args.has_log:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, stdin_settings)
     '''
+
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(Fore.RED + "Keyboard interrupt, aborting..." + Fore.RESET)
+        try: sys.exit(0)
+        except SystemExit: os._exit(0)

@@ -39,8 +39,8 @@ class WebAPI(object):
         self.args = args
         self.recorder = recorder
         self.cache = {
-            "albums_with_filter": {},
-            "artists_on_album": {},
+            "artist_albums": {},
+            "album_artists": {},
             "genres": {},
             "charts": {},
             "coverart": {},
@@ -93,11 +93,11 @@ class WebAPI(object):
         # Step 3. Signed in, display data
         self.spotify = spotipy.Spotify(auth_manager=self.auth_manager)
         
-    def cache_result(self, name, uri, result):
-        self.cache[name][uri] = result
+    def cache_result(self, name, key, result):
+        self.cache[name][key] = result
 
-    def get_cached_result(self, name, uri):
-        return self.cache[name].get(uri)
+    def get_cached_result(self, name, key):
+        return self.cache[name].get(key)
 
     def request_json(self, url, msg):
         res = self.request_url(url, msg)
@@ -130,40 +130,41 @@ class WebAPI(object):
         res = self.request_json(self.api_url('me/player'), "is_playing")
         return res["is_playing"]
 
-    def get_track(self, uri):
+    def get_track_info(self, id):
         # check for cached result
-        cached_result = self.get_cached_result("tracks", uri)
+        cached_result = self.get_cached_result("tracks", id)
         if cached_result is not None: return cached_result
 
         # extract track id from uri
-        uri_tokens = uri.split(':')
-        if len(uri_tokens) != 3: return []
-        track = self.spotify.track(uri_tokens[2])
+        #uri_tokens = uri.split(':')
+        #if len(uri_tokens) != 3: return []
+        #track = self.spotify.track(uri_tokens[2])
+        track = self.spotify.track(id)
 
-        self.cache_result("tracks", uri, track)
+        self.cache_result("tracks", id, track)
         return track
 
-    # excludes 'appears on' albums for artist
-    def get_albums_with_filter(self, uri):
+    # Artist albums
+    def get_artist_albums(self, id):
         args = self.args
-        album_type = ('&album_type=' + args.artist_album_type) if args.artist_album_type is not None else ""
-        market = ('&market=' + args.artist_album_market) if args.artist_album_market is not None else ""
+        #album_type = ('&album_type=' + args.artist_album_type) if args.artist_album_type is not None else ""
+        #market = ('&market=' + args.artist_album_market) if args.artist_album_market is not None else ""
 
         def get_albums_json(offset):
-            url = self.api_url('artists/' + uri_tokens[2] + '/albums/?=' + album_type + market + '&limit=50&offset=' + str(offset))
+            #url = self.api_url('artists/' + id + '/albums/?=' + album_type + market + '&limit=50&offset=' + str(offset))
+            url = self.api_url('artists/' + id + '/albums/?limit=50&offset=' + str(offset))
             return self.request_json(url, "albums")
 
         # check for cached result
-        cached_result = self.get_cached_result("albums_with_filter", uri)
+        cached_result = self.get_cached_result("artist_albums", id)
         if cached_result is not None: return cached_result
 
         # extract artist id from uri
-        uri_tokens = uri.split(':')
-        if len(uri_tokens) != 3: return []
+        #uri_tokens = uri.split(':'); if len(uri_tokens) != 3: return []
 
         # it is possible we won't get all the albums on the first request
         offset = 0
-        album_uris = []
+        album_ids = []
         total = None
         while total is None or offset < total:
             try: # rate limit if not first request
@@ -172,13 +173,14 @@ class WebAPI(object):
                 if albums is None: break
 
                 # extract album URIs
-                album_uris += [album['uri'] for album in albums['items']]
-                offset = len(album_uris)
+                for album in albums['items']: album_ids.append(album['id']) 
+                offset = len(album_ids)
                 if total is None: total = albums['total']
             except KeyError as e: break
-        print(str(len(album_uris)) + " albums found")
-        self.cache_result("albums_with_filter", uri, album_uris)
-        return album_uris
+        if albums is not None: print(Fore.YELLOW + "Getting all (" + str(len(album_ids)) + 
+            ") albums from artist \"" + albums['items'][0]["artists"][0]["name"] + "\"")
+        self.cache_result("artist_albums", id, album_ids)
+        return album_ids
 
     def get_playlist_by_name(self, name, user):
         offset = 0; count = 1
@@ -196,69 +198,64 @@ class WebAPI(object):
         print(Fore.RED + "Playlist with name " + name + " not found" + Fore.RESET)
         return None
 
+    '''
     def get_saved_tracks(self):
         tracks = self.spotify.current_user_saved_tracks()
         count = tracks['total']
-        tracks_uris = []
+        tracks_ids = []
         for offset in range(0, count, 50):
             tracks = self.spotify.current_user_saved_tracks(limit=50,offset=offset)
-            tracks_uris += [track['track']['id'] for track in tracks['items']]
-        return track_uris
+            tracks_ids += [track['track']['id'] for track in tracks['items']]
+        return tracks_ids
+    '''
 
-    def get_album_tracks(self, recorder, uri):
-        uri_tokens = uri.split(':')
-        # Only playlist in format spotify:album:<album_id> are accepted
-        if len(uri_tokens) != 3: return None
-        url = self.api_url('albums/' + uri_tokens[2])
+    def get_album_tracks(self, id):
+        url = self.api_url('albums/' + id)
         res = self.request_json(url, "album name, track count and tracks")
-        recorder.album_name = res['name']
+        self.recorder.album_name = res['name']
         count = res['total_tracks']
-        print(Fore.YELLOW + "Album name: " + recorder.album_name + 
-                " release data " + res['release_date'] + " with " + str(count) + " tracks(s)" + Fore.RESET)
-        return [track['uri'] for track in res['tracks']['items']]
+        print(Fore.YELLOW + "Album name: " + self.recorder.album_name + 
+                ", released " + res['release_date'] + ", containing " + str(count) + " tracks(s)" + Fore.RESET)
+        return [track['id'] for track in res['tracks']['items']]
 
-    def get_playlist_tracks(self, recorder, uri):
+    def get_playlist_tracks(self, id):
         def get_playlist_name_and_count_json(playlist_id):
             url = self.api_url('playlists/' + playlist_id + "?fields=name, owner.display_name, tracks.total")
             res = self.request_json(url, "playlist name and track count")
-            recorder.playlist_name = res['name']
-            recorder.playlist_owner = res['owner']["display_name"]
+            self.recorder.playlist_name = res['name']
+            self.recorder.playlist_owner = res['owner']["display_name"]
             count = res['tracks']['total']
-            print(Fore.YELLOW + "Playlist name: " + recorder.playlist_name + 
-                  " owned by " + recorder.playlist_owner + " with " + str(count) + " tracks(s)" + Fore.RESET)
+            print(Fore.YELLOW + "Playlist name: " + self.recorder.playlist_name + 
+                  " owned by " + self.recorder.playlist_owner + " with " + str(count) + " tracks(s)" + Fore.RESET)
             return count
         
         def get_playlist_tracks_json(playlist_id, offset):
-            url = self.api_url('playlists/' + playlist_id + '/tracks?fields=items(track(uri))&limit=100&offset=' + str(offset))
+            #url = self.api_url('playlists/' + playlist_id + '/tracks?fields=items(track(uri))&limit=100&offset=' + str(offset)) # Just get URI's
+            url = self.api_url('playlists/' + playlist_id + '/tracks?limit=100&offset=' + str(offset))
             return self.request_json(url, "playlist")
 
-        # check for cached result
-        #cached_result = self.get_cached_result("artists_on_album", uri)
-        #if cached_result is not None:
-        #    return cached_result
-
-        # extract playlist_id from uri
-        uri_tokens = uri.split(':')
-        # Only playlist in format spotify:playlist:<playlist_id> are accepted
-        if len(uri_tokens) != 3: return None
-        playlist_id = uri_tokens[2]
-        self.playlist_track_count = get_playlist_name_and_count_json(playlist_id)
+        self.playlist_track_count = get_playlist_name_and_count_json(id)
 
         playlist_tracks = []
+        print_str("Progress: ")
         for offset in range(0, self.playlist_track_count, 100):
-            playlist = get_playlist_tracks_json(playlist_id, offset)
-            playlist_tracks += [track['track']['uri'] for track in playlist['items']]
-
-        #self.cache_result("artists_on_album", uri, result)
+            playlist = get_playlist_tracks_json(id, offset)
+            print_str(str(offset) + " ")
+            for track in playlist['items']:
+                _track = track['track']
+                _id = _track['id']
+                playlist_tracks += [_id]
+                self.cache_result("tracks", _id, _track)
+        print(str(self.playlist_track_count) + " Done")
         return playlist_tracks
     
-    def get_artists_on_album(self, uri):
+    def get_album_artists(self, uri):
         def get_album_json(album_id):
             url = self.api_url('albums/' + album_id)
             return self.request_json(url, "album")
 
         # check for cached result
-        cached_result = self.get_cached_result("artists_on_album", uri)
+        cached_result = self.get_cached_result("album_artists", uri)
         if cached_result is not None:
             return cached_result
 
@@ -270,7 +267,7 @@ class WebAPI(object):
         if album is None: return None
 
         result = [artist['name'] for artist in album['artists']]
-        self.cache_result("artists_on_album", uri, result)
+        self.cache_result("album_artists", uri, result)
         return result
 
     # genre_type can be "artist" or "album"
@@ -351,10 +348,16 @@ class WebAPI(object):
         return charts_obj
 
     def start_playback(self, device_id = None, context_uri = None, uris = None, offset = None, position_ms = None):
-        return self.spotify.start_playback(device_id = self.device_id, context_uri = context_uri, uris = uris, offset = offset, position_ms = position_ms)
+        try: return self.spotify.start_playback(device_id = self.device_id, context_uri = context_uri, uris = uris, offset = offset, position_ms = position_ms)
+        except:
+            print(Fore.RED + "Start Playback: Spotify Player not available, aborting..." + Fore.RESET)
+            sys.exit(4)
         
     def stop_playback(self, device_id=None):
-        return self.spotify.pause_playback(device_id)
+        try: return self.spotify.pause_playback(device_id)
+        except:
+            print(Fore.RED + "Stop Playback: Spotify Player not available, aborting..." + Fore.RESET)
+            sys.exit(5)
 
     def get_coverart(self, track, cover_size_idx):
         def get_track(track_id):

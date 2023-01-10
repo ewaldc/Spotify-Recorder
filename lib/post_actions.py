@@ -263,12 +263,3 @@ class PostActions(object):
                   recorder.current_playlist.name + "..." + Fore.RESET)
             recorder.current_playlist.remove_tracks(self.tracks_to_remove)
             while recorder.current_playlist.has_pending_changes: time.sleep(0.1)
-
-    def remove_offline_cache(self):
-        recorder = self.recorder
-        if self.args.remove_offline_cache:
-            if self.args.settings is not None: storage_path = norm_path(self.args.settings)
-            else: storage_path = default_settings_dir()
-
-            storage_path = os.path.join(storage_path, "Storage")
-            if path_exists(storage_path): shutil.rmtree(enc_str(storage_path))

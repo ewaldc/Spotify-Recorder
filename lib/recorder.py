@@ -90,38 +90,16 @@ class SportifyRecorder(threading.Thread):
             self.current_playlist = self.web.get_playlist_by_name(uris[0], user_id)
             uris = [self.current_playlist['uri']]
 
-        def get_tracks_from_uri(uri):
-            if type(uri) in (tuple, list): return uri
-
-            if (uri.startswith("spotify:artist:") and (args.artist_album_type is not None or args.artist_album_market is not None)):
-                return self.web.get_albums_with_filter(uri)
-            elif uri.startswith("spotify:track:"): return [uri]
-            elif uri.startswith("spotify:playlist:"): 
-                return self.web.get_playlist_tracks(self, uri)
-            elif uri.startswith("spotify:album:"): 
-                return self.web.get_album_tracks(self, uri)
-            else: return [] # invalid URI
-
-            '''        
-            elif uri.startswith("spotify:charts:"):
-                charts = self.web.get_charts(uri)
-                if charts is not None:
-                    self.current_chart = charts
-                    chart_uris = charts["tracks"]
-                    return itertools.chain(*[self.load_link(chart_uri) for chart_uri in chart_uris])
-                else: return []
-            '''
-
         # calculate total size and time
         track_info_list = []
         threads = []
         self.show_total = True
 
-        print("Assemble list of tracks to record")
+        print("Assemble list of tracks to record (can take several minutes for large playlists)")
         for uri in uris:
-            tracks = get_tracks_from_uri(uri)
+            tracks = self.get_tracks_from_uri(uri)
             for idx, track in enumerate(tracks):
-                track_info = self.web.get_track(track)
+                track_info = self.web.get_track_info(track)
                 if is_unavailable(self.country, track_info):
                     name = track_info["artists"][0]["name"] + '-' + track_info["name"]
                     print(Fore.RED + 'Track (' + name + ') is not available, skipping...' + Fore.RESET)
@@ -165,10 +143,11 @@ class SportifyRecorder(threading.Thread):
                     # before we skip or can fail loading the track
                     if not args.overwrite and path_exists(output_file):
                         if is_partial(output_file, track_duration_ms): 
-                            msg = "(Overwriting partial file) "
+                            print(Fore.YELLOW + "\"" + encoder + "\" encoder: Partial encoding found for " + Fore.CYAN + output_file 
+                                + Fore.YELLOW + " ... overwriting" + Fore.RESET)
                             os.remove(output_file)
                         else:
-                            print(Fore.YELLOW + "Encoder \"" + encoder + "\": complete recording found for " + Fore.CYAN + output_file + Fore.RESET)
+                            print(Fore.GREEN + "\"" + encoder + "\" encoder: Complete encoding found for " + Fore.CYAN + output_file + Fore.RESET)
                             if args.update_metadata is not None: # update id3v2 with metadata and embed front cover image
                                 set_metadata_tags(args, output_file, idx, track_info, self, encoder, ext)
                             continue # next encoder
@@ -187,18 +166,23 @@ class SportifyRecorder(threading.Thread):
                         record_track = False # No need to record more than once
                         track_name = get_track_name(track_info)
                         artist_name = get_track_artist(track_info)
-                        sys.stdout.write(Fore.GREEN + '\nRecording Track "' + msg + track_name + '" by "' +
-                            artist_name + '" (' + track_uri + ') ... ' + Fore.RESET)
+
                         #audio_file = tempfile.mkstemp(suffix=".wav")
                         #audio_file = "recording" + str(idx) + ".wav"
                         audio_file = os.path.join(dir, artist_name + " - " + track_name + ".wav")  #dir.name
-                        if os.path.exists(audio_file):
-                            print(Fore.GREEN + 'found raw recording from previous session (--keep flag?): reusing/not overwriting' + Fore.RESET)
-                        else:  # Start recording
+                        if not path_exists(audio_file) or is_partial(audio_file, track_duration_ms):
+                            try: 
+                                os.remove(audio_file)
+                                print(Fore.GREEN + 'Found incomplete raw recording from previous session - removing' + Fore.RESET)
+                            except OSError: pass
+                            sys.stdout.write(Fore.GREEN + '\nRecording Track "' + msg + track_name + '" by "' +
+                                artist_name + '" (' + track_uri + ') ... ' + Fore.RESET)
+                            # Start recording
                             self.audio_recorder.start_recording(audio_file)
                             self.web.start_playback(uris=[track_uri])
                             self.audio_recorder.stop_recording(track_duration_ms / 1000.0)
-                        print(Fore.GREEN + 'recording complete' + Fore.RESET)
+                            print(Fore.GREEN + 'recording complete' + Fore.RESET)
+                        else: print(Fore.GREEN + 'Found complete raw recording from previous session - reusing' + Fore.RESET)
 
                     t = threading.Thread(target=encode_and_tag, args=(encoder, ext, output_file, audio_file, track_info, idx))
                     threads.append(t)
@@ -235,9 +219,6 @@ class SportifyRecorder(threading.Thread):
             # actually removing the tracks from playlist
             #self.post.remove_tracks_from_playlist()
 
-            # remove libspotify's offline storage cache
-            #self.post.remove_offline_cache()
-
         # logout, we are done
         self.audio_recorder.terminate()
 
@@ -253,6 +234,20 @@ class SportifyRecorder(threading.Thread):
         self.post.print_summary()
         #self.logout()
         #self.finished.set()
+
+    def get_tracks_from_uri(self, uri):
+        if type(uri) in (tuple, list): return uri
+
+        if uri.startswith("spotify:artist:"): 
+            #nested_list = [self.web.get_album_tracks(id) for id in self.web.get_artist_albums(uri[15:])]
+            #return [tid for id in nested_list for tid in id]  #unpacking list comprehension
+            _tracks = []  #unpacking list comprehension
+            for id in self.web.get_artist_albums(uri[15:]): _tracks += self.web.get_album_tracks(id)
+            return _tracks
+        elif uri.startswith("spotify:track:"): return [uri[14:]]
+        elif uri.startswith("spotify:playlist:"): return self.web.get_playlist_tracks(uri[17:])
+        elif uri.startswith("spotify:album:"):  return self.web.get_album_tracks(uri[14:])
+        else: return [] # invalid URI
 
     def format_track_path(self, idx, track_info, ext):
         args = self.args
@@ -295,7 +290,11 @@ class SportifyRecorder(threading.Thread):
 
         # create directory if it doesn't exist
         audio_path = os.path.dirname(audio_file)
-        if not path_exists(audio_path): os.makedirs(enc_str(audio_path))
+        if not path_exists(audio_path): 
+            try: os.makedirs(enc_str(audio_path))
+            except: 
+                print(Fore.RED + "Failed to create file - exiting: " + Fore.RESET + audio_file)
+                sys.exit(5)
 
         return audio_file
 
