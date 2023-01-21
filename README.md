@@ -10,8 +10,8 @@ Spotify-Recorder provides 5 main functions:
 
 # Architecture
 Spotify-Recorder is implemented in Python, using classes and threads for parallel encoding and tagging.
-Spotify-Recorder makes limited use of Spotipy as it mostly uses its own code for interfacing with the Spotify Web based API.
-Mutagen is used for tagging metadata.
+Spotify-Recorder makes very limited use of Spotipy as it mostly uses its own code for interfacing with the Spotify Web based API.
+Mutagen is used for reading, setting and updating tags/metadata.
 Pyaudiowpatch is used as stand-in for PyAudio as it provides better support for loopback devices.
 Psutil is used to increment the process priority
 
@@ -36,18 +36,21 @@ SPOTIPY_REDIRECT_URI="http://www.purple.com/"
 ```
 
 # Installation on Windows
-Install Python3 e.g. Python3.10.x.
+**The easiest way** to get started is to download a precompiled, zipped version from the ``releases`` folder
+
+Alternatively you can build your own copy from the sources in this repository:
+- Clone or download this repository
+- Install Python3 e.g. Python3.10.x.
 Portable Python is also working, just ensure ``%APPDIR%\Python3\App\Python`` and ``%APPDIR%\Python3\App\Python\Scripts`` are part of the user environment PATH setting (``%APPDIR%`` is the root of your portable apps directory).
-Install ``Ffmpeg`` and make sure ffmpeg.exe is part of the PATH (edit environment variables e.g. ``%APPDIR%\AudioVideo\ffmpeg-5.1.2\bin``)
-Open a Python Shell (typically PowerShell):
+- Install ``Ffmpeg`` and make sure ffmpeg.exe is part of the PATH (edit environment variables e.g. ``%APPDIR%\AudioVideo\ffmpeg-5.1.2\bin``)
+- Open a Python Shell (typically PowerShell) to install the required dependencies:
 ```
 pip install mutagen psutil colorama pyaudiowpatch spotipy python-dotenv
 ```
-Finally create a packaged Windows binary using ``pyinstaller`` in the current directory or directory of choice (distpath)
+- Finally create a packaged Windows binary using ``pyinstaller`` in the current directory or directory of choice (distpath)
 ```
 pyinstaller spotify-recorder.spec
 ```
-Alternatively you can you just download a precompiled, zipped version from the ``releases`` folder
 
 # Usage
 spotify-recorder is a command line tool only that takes many command-line options:
@@ -142,16 +145,13 @@ positional arguments:
       -V|--version            Show program's version number and exit
 
     Examples:
-    - record a single file using user from API keys: _spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR_
-    - record entire playlist from playlist URI: _spotify-recorder spotify:playlist:4vkGNcsS8lRXj4q945NIA4_
-    - record entire named playlist: _spotify-recorder myplaylist_
-    - record a list of URIs from text file: _spotify-recorder list_of_uris.txt_
-    - record entire named playlist "myplaylist", encode recorded WAV files to Opus format, create a M3U playlist (named       "playlist_myplaylist_opus.m3u", use a relative directory with the first letter of the artist as prefix, saving the Opus output in drive "M:" in for example directory "/opus/myplaylist/a/Adele - Chasing Pavements.opus". Search "M:/opus" if an encoded Opus file already exists, and if that is the case, use0a symlink or copy to that file instead.  The search function is useful to avoid re-recording e.g. when several playlists contain the same tracks.
-        _spotify-recorder -e "opus" --playlist "myplaylist" --playlist-create "m3u" --playlist-relative-path "./{artist:1l}/"_
-          _--search "M:/{ext}" --filename "M:/{ext}/{playlist}/{artist:1l}/{artist} - {track_name}.{ext}"_"
-    - update metadata on files already ripped, rip new URIs: _spotify-recorder --update-metadata spotify:track:52xaypL0Kjzk0ngwv3oBPR_
-    - record entire named playlist "myplaylist", encode recorded WAV files to Opus and FLAC formats, pass "-af aformat=s16:48000" to ffmpeg for encoding to FLAC format.
-      _spotify-recorder -e "opus" "flac" --codec_args", "flac=-af aformat=s16:48000" --filename "M:/{ext}/{playlist}/{artist:1l}/{artist} - {track_name}.{ext}"_
+- record a single file using user from API keys: <br>*spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR*
+- record entire playlist from playlist URI: <br>*spotify-recorder spotify:playlist:4vkGNcsS8lRXj4q945NIA4*
+- record entire named playlist: <br>*spotify-recorder --playlist myplaylist*
+- record a list of URIs from text file: <br>*spotify-recorder list_of_uris.txt*
+- record entire named playlist "myplaylist", encode recorded WAV files to Opus format, create a M3U playlist (named "playlist_myplaylist_opus.m3u", use a relative directory with the first letter of the artist as prefix, saving the Opus output in drive "M:" in for example directory "/opus/myplaylist/a/Adele - Chasing Pavements.opus". Search "M:/opus" if an encoded Opus file already exists, and if that is the case, use0a symlink or copy to that file instead.  The search function is useful to avoid re-recording e.g. when several playlists contain the same tracks.<br>*spotify-recorder -e "opus" --playlist "myplaylist" --playlist-create "type:m3u" "path:./{artist:1l}/"*<br>*--search "M:/{ext}" --filename "M:/{ext}/{playlist}/{artist:1l}/{artist} - {track_name}.{ext}"*
+- update metadata on files already ripped, rip new URIs: <br>*spotify-recorder --update-metadata spotify:track:52xaypL0Kjzk0ngwv3oBPR*
+- record entire named playlist "myplaylist", encode recorded WAV files to Opus and FLAC formats, pass "-af aformat=s16:48000" to ffmpeg for encoding to FLAC format: <br>*spotify-recorder -e "opus" "flac" --codec_args", "flac=-af aformat=s16:48000" --filename "M:/{ext}/{playlist}/{artist:1l}/{artist} - {track_name}.{ext}"*
 
 # Config settings
 
