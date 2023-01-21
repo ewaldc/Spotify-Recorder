@@ -62,8 +62,6 @@ class SportifyRecorder(threading.Thread):
         self.web = WebAPI(args, self)
         self.user = self.web.get_user(None)
         self.country = self.user["country"]
-        #self.start_lock = threading.Lock()  # Mutex locks for AudioRecorder
-        #self.stop_lock = threading.Lock()
         self.audio_recorder = AudioRecorder(self, pyaudio.PyAudio(), recording_format[args.recording_format])
         
         proxy = os.environ.get('http_proxy')
@@ -80,6 +78,7 @@ class SportifyRecorder(threading.Thread):
         uris = args.uri        # list of spotify URIs
                
         # if uris is a playlist, substitute for list of tracks
+        self.playlist = None
         self.playlist_name = None
         self.playlist_owner = None
         #if ":playlist:" in uris[0]: uris = self.web.get_playlist_tracks(self, uris[0])
@@ -87,22 +86,22 @@ class SportifyRecorder(threading.Thread):
         #if args.playlist: user_id = self.user['id'] if args.playlist_user is None else args.playlist_user
         if args.playlist: 
             user_id = self.user['id']
-            self.current_playlist = self.web.get_playlist_by_name(uris[0], user_id)
-            uris = [self.current_playlist['uri']]
+            self.playlist = self.web.get_playlist_by_name(uris[0], user_id)
+            uris = [self.playlist['uri']]
 
         # calculate total size and time
         track_info_list = []
         threads = []
         self.show_total = True
 
-        print("Assemble list of tracks to record (can take several minutes for large playlists)")
+        print("Assemble list of tracks to record (can take minutes for large playlists)")
         for uri in uris:
             tracks = self.get_tracks_from_uri(uri)
             for idx, track in enumerate(tracks):
                 track_info = self.web.get_track_info(track)
                 if is_unavailable(self.country, track_info):
                     name = track_info["artists"][0]["name"] + '-' + track_info["name"]
-                    print(Fore.RED + 'Track (' + name + ') is not available, skipping...' + Fore.RESET)
+                    print(Fore.RED + 'Track is not available - skipping: ' + Fore.CYAN + name + Fore.RESET)
                     self.post.log_failure(track_info)
                     self.progress.skipped_tracks += 1
                     continue
@@ -121,7 +120,7 @@ class SportifyRecorder(threading.Thread):
 
         # reording loop
         for idx, track_info in enumerate(track_info_list):
-            if args.recording == "skip" or self.abort: break
+            if self.abort: break
             track_duration_ms = track_info["duration_ms"]
             track_uri = track_info["uri"]
             
@@ -131,24 +130,29 @@ class SportifyRecorder(threading.Thread):
 
             try:
                 self.progress.increment_track_idx()                #self.check_stop_time()
-                msg = ""
-                record_track = True    
-                #self.skip.clear()
-                #if self.abort: break
+                record_track = True
+                encode_track = True  
+                track_name = get_track_name(track_info)
+                artist_name = get_track_artist(track_info)
+                if not track_name or not artist_name:
+                    print(Fore.RED + 'Spotify track (' + track_uri +' ) is invalid, skipping' + Fore.RESET)
+                    continue
+
+                audio_file = os.path.join(dir, artist_name + " - " + track_name + ".wav")  #dir.name
                 for encoder in args.encode:
                     # Wait for all of them to finish
                     ext = get_ext(self.args, encoder)
                     output_file = self.format_track_path(idx, track_info, ext)
+                    alt_output_file = get_alternative_file(output_file, track_info, ext)
 
                     # before we skip or can fail loading the track
-                    if not args.overwrite and path_exists(output_file):
-                        if is_partial(output_file, track_duration_ms): 
-                            print(Fore.YELLOW + "\"" + encoder + "\" encoder: Partial encoding found for " + Fore.CYAN + output_file 
-                                + Fore.YELLOW + " ... overwriting" + Fore.RESET)
+                    if not args.overwrite and (path_exists(output_file) or path_exists(alt_output_file)):
+                        if is_partial(output_file, track_duration_ms, alt_output_file): 
+                            print(Fore.YELLOW + "\"" + encoder + "\" encoder: Partial encoding found - overwriting: " + Fore.CYAN + output_file + Fore.RESET)
                             os.remove(output_file)
                         else:
                             print(Fore.GREEN + "\"" + encoder + "\" encoder: Complete encoding found for " + Fore.CYAN + output_file + Fore.RESET)
-                            if args.update_metadata is not None: # update id3v2 with metadata and embed front cover image
+                            if args.tags["action"] == "update": # update id3v2 with metadata and embed front cover image
                                 set_metadata_tags(args, output_file, idx, track_info, self, encoder, ext)
                             continue # next encoder
                     if args.search:
@@ -163,34 +167,38 @@ class SportifyRecorder(threading.Thread):
                             continue
                         
                     if record_track:
-                        record_track = False # No need to record more than once
-                        track_name = get_track_name(track_info)
-                        artist_name = get_track_artist(track_info)
-
-                        #audio_file = tempfile.mkstemp(suffix=".wav")
-                        #audio_file = "recording" + str(idx) + ".wav"
-                        audio_file = os.path.join(dir, artist_name + " - " + track_name + ".wav")  #dir.name
                         if not path_exists(audio_file) or is_partial(audio_file, track_duration_ms):
+                            if args.recording == "skip":  continue  # We have a missing or incomplete file but can't record -> skip 
                             try: 
-                                os.remove(audio_file)
-                                print(Fore.GREEN + 'Found incomplete raw recording from previous session - removing' + Fore.RESET)
+                                #os.remove(audio_file)
+                                os.rename(audio_file, audio_file + ".old") 
+                                print(Fore.YELLOW + 'Found incomplete raw recording from previous session - removing' + Fore.RESET)
                             except OSError: pass
-                            sys.stdout.write(Fore.GREEN + '\nRecording Track "' + msg + track_name + '" by "' +
+                            sys.stdout.write(Fore.GREEN + '\nRecording Track "' + track_name + '" by "' +
                                 artist_name + '" (' + track_uri + ') ... ' + Fore.RESET)
                             # Start recording
                             self.audio_recorder.start_recording(audio_file)
-                            self.web.start_playback(uris=[track_uri])
-                            self.audio_recorder.stop_recording(track_duration_ms / 1000.0)
-                            print(Fore.GREEN + 'recording complete' + Fore.RESET)
+                            if self.web.start_playback(uris=[track_uri]):
+                                self.audio_recorder.stop_recording(track_duration_ms / 1000.0)
+                                self.post.log_success(track_info) 
+                                print(Fore.GREEN + 'recording complete' + Fore.RESET)
+                            else: # track can not be played
+                                self.audio_recorder.stop_recording(0)
+                                encode_track = False
+                                self.post.log_failure(track_info)
+                                print(Fore.RED + 'recording failed - track can not be played' + Fore.RESET)
                         else: print(Fore.GREEN + 'Found complete raw recording from previous session - reusing' + Fore.RESET)
+                        record_track = False # No need to record more than once
 
-                    t = threading.Thread(target=encode_and_tag, args=(encoder, ext, output_file, audio_file, track_info, idx))
-                    threads.append(t)
-                    t.start()
+                    if encode_track:
+                        t = threading.Thread(target=encode_and_tag, args=(encoder, ext, output_file, audio_file, track_info, idx))
+                        threads.append(t)
+                        t.start()
 
                 # Increment skipped tracks when no recording required for every single encoder
-                if record_track: 
-                    print(Fore.YELLOW + "Skipping " + track_uri + " - complete recordings found for all encoders" + Fore.RESET)
+                if record_track:
+                    msg = ' or missing raw recording with recording set to "skip"' if args.recording == "skip" else ''
+                    print(Fore.YELLOW + 'Skipping ' + track_uri + ' - complete audio files found for all encoders' + msg + Fore.RESET)
                     self.progress.skipped_tracks += 1
 
                 # update id3v2 with metadata and embed front cover image
@@ -198,13 +206,12 @@ class SportifyRecorder(threading.Thread):
 
                 # make a note of the index and remove all the
                 # tracks from the playlist when everything is done
-                self.post.queue_remove_from_playlist(idx)
-                self.post.log_success(track_info) # finally log success
+                #self.post.queue_remove_from_playlist(idx)
+                # finally log success
 
             except (Exception) as e:
                 sys.stdout.write(Fore.YELLOW + "skipping to next track\n" + Fore.RESET)
-                if isinstance(e, Exception):
-                    print(Fore.RED + "Error detected" + Fore.RESET)
+                if isinstance(e, Exception): print(Fore.RED + "Error detected" + Fore.RESET)
                 print(str(e))
                 traceback.print_exc()
                 self.post.log_failure(track_info)
@@ -214,7 +221,7 @@ class SportifyRecorder(threading.Thread):
 
             for t in threads: t.join() # Wait for last threads to complete
             threads = []
-            if args.recording != "keep": os.remove(audio_file)
+            if args.recording != "keep" and not record_track: os.remove(audio_file)
 
             # actually removing the tracks from playlist
             #self.post.remove_tracks_from_playlist()
@@ -223,12 +230,9 @@ class SportifyRecorder(threading.Thread):
         self.audio_recorder.terminate()
 
         # Create playlists
-        for encoder in args.encode:
-            ext = get_ext(self.args, encoder)
-            # create playlist m3u file if needed
-            self.post.create_playlist_m3u(track_info_list, ext)
-            # create playlist wpl file if needed
-            self.post.create_playlist_wpl(track_info_list, ext)
+        if args.playlist_create:
+            for encoder in args.encode:
+                self.post.create_playlist(track_info_list, get_ext(self.args, encoder))
 
         self.post.end_failure_log()
         self.post.print_summary()

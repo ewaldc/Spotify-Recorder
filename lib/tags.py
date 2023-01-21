@@ -8,11 +8,83 @@ from lib.encode import encoder_default_args
 from stat import ST_SIZE
 from lib.utils import *
 from datetime import datetime
-import os, sys
+import os, sys, traceback
 import base64
 
 global cover_size_list
-cover_size_list = ['large', 'medium',  'small']
+cover_size_choices = ['large', 'medium',  'small']
+
+def get_metadata_tags(recorder, audio_file, ext):
+    def get_codec(audio):
+        for mime in audio.mime:
+            if "codecs=" in mime: return mime.split("codecs=")[1]
+        return None
+
+    def fix_metadata_tags(audio, track):
+        _pattern = os.path.splitext(audio_file.split(os.sep)[-1])[0]
+        _tracks = recorder.web.search_tracks(_pattern)
+        print("Attempting to repair metadata")
+        _codec = get_codec(audio)
+        if _codec and _tracks['tracks'] and _tracks['tracks']['items']: set_metadata_tags(recorder, audio_file, 1, _tracks['tracks']['items'][0], _codec, ext)
+        else: print(Fore.RED + "Failed to determine codec, repair failed" + Fore.RESET)
+
+    def get_id3_tags(audio):
+        track["name"] = audio['TIT2'].text[0]
+        track["artist"][0]["name"] = audio['TPE1'].text[0]
+        return track
+
+    def get_vorbis_comments(audio):
+        try:
+            track["name"] = audio.tags["TITLE"][0]
+            track['track_number'] = audio.tags["TRACKNUMBER"][0]
+            track["artists"][0]["name"] =  audio.tags["ARTIST"][0]
+            album['name'] = audio.tags["ALBUM"][0]
+            album['release_date'] = audio.tags["DATE"][0]
+            album["artists"][0]["name"] = audio.tags["ALBUMARTIST"][0]
+        except:
+            print(Fore.YELLOW + "\nKey metadata missing for audio file: " + Fore.CYAN + audio_file + Fore.RESET)
+            #fix_metadata_tags(audio, track)
+        return track
+
+    track = {'name':'', 'uri':'', 'disc_number':'1', 'track_number':'1', 'artists':[{'name':''}], 
+        'album':{'name':'', 'total_tracks':'1', 'release_date':'', 'release_date_precision':'year', 'artists':[{'name':''}]}
+    }
+    album = track['album']
+    try:
+        match ext:
+            case "flac":
+                audio = flac.FLAC(audio_file)
+                return set_vorbis_comments(audio)
+            case "aiff":
+                audio = aiff.AIFF(audio_file)
+                set_id3_tags(audio)
+            case "ogg":
+                audio = oggvorbis.OggVorbis(audio_file)
+                return set_vorbis_comments(audio)
+            case "opus":
+                audio = oggopus.OggOpus(audio_file)
+                return get_vorbis_comments(audio)
+            case "aac":
+                audio = aac.AAC(audio_file)
+                set_id3_tags_raw(audio, audio_file)
+            case "m4a":
+                if sys.version_info >= (3, 0):
+                    from mutagen import mp4
+                    audio = mp4.MP4(audio_file)
+                    set_mp4_tags(audio)
+                else:
+                    from mutagen import m4a, mp4
+                    audio = m4a.M4A(audio_file)
+                    set_m4a_tags(audio)
+                    audio = mp4.MP4(audio_file)
+            case "mp3":
+                audio = mp3.MP3(audio_file, ID3=id3.ID3)
+                return get_id3_tags(audio)
+    except Exception as e:
+        print(Fore.RED + "\nCorrupt metadata for aufio file: " + Fore.CYAN + audio_file + Fore.RESET)
+        print(str(e))
+        #traceback.print_exc()
+        return track
 
 def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
     def tag_to_ascii(_str):
@@ -52,17 +124,14 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
         total_tracks = album['total_tracks']
 
         # the comment tag can be formatted
-        if args.comment is not None:
-            comment = tag_to_ascii(format_track_string(recorder, args.comment, idx, track, ext))
-
-        if args.grouping is not None:
-            grouping = tag_to_ascii(format_track_string(recorder, args.grouping, idx, track, ext))
-
+        comment = tag_to_ascii(format_track_string(recorder, args.tags["comment"], idx, track, ext)) if args.tags["comment"] else ""
+            
+        grouping = tag_to_ascii(format_track_string(recorder, args.tags["grouping"], idx, track, ext)) if args.tags["grouping"] else ""
         if genres is not None and genres and args.ascii_path_only:
             genres = [tag_to_ascii(genre) for genre in genres] if args.ascii_path_only else genres
 
         # cover art image
-        image = recorder.web.get_coverart(track, cover_size_list.index(args.cover_size))
+        image = recorder.web.get_coverart(track, cover_size_choices.index(args.tags["cover-size"]))
 
         def idx_of_total_str(_idx, _total):
             if _total > 0: return "%d/%d" % (_idx, _total)
@@ -75,8 +144,10 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
                     cover_file = os.path.join(cover_path, file_name)
                     if not path_exists(cover_file):
                         with open(enc_str(cover_file), "wb") as f: f.write(image)
-                if 'file' in args.cover and args.cover_file is not None: write_image(args.cover_file)
-                if 'embed' in args.cover: embed_image_func(image)
+                _cover = args.tags["cover"]
+                if _cover == 'embed': embed_image_func(image)
+                else: write_image(_cover)
+
 
         def add_id3_tags(tags):
             def embed_image(data):
@@ -90,8 +161,8 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
             tags.add(id3.TDRC(text=[album['release_date']], encoding=3))
             tags.add(id3.TPOS(text=[disc_number], encoding=3))
             tags.add(id3.TRCK(text=[idx_of_total_str(track_number, total_tracks)], encoding=3))
-            if args.comment is not None: tags.add(id3.COMM(text=[comment], encoding=3))
-            if args.grouping is not None: tags.add(id3.TIT1(text=[grouping], encoding=3))
+            if comment: tags.add(id3.COMM(text=[comment], encoding=3))
+            if grouping: tags.add(id3.TIT1(text=[grouping], encoding=3))
             if genres is not None and genres:
                 tcon_tag = id3.TCON(encoding=3)
                 tcon_tag.genres = genres
@@ -154,8 +225,8 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
             #audio.tags["DISCTOTAL"] = str(num_discs)
             audio.tags["TRACKNUMBER"] = str(track_number)
             #audio.tags["TRACKTOTAL"] = str(total_tracks)
-            if args.comment is not None: audio.tags["COMMENT"] = comment
-            if args.grouping is not None: audio.tags["GROUPING"] = grouping
+            if comment: audio.tags["COMMENT"] = comment
+            if grouping: audio.tags["GROUPING"] = grouping
             if genres is not None and genres: audio.tags["GENRE"] = ", ".join(genres)
 
             audio.save()
@@ -177,8 +248,8 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
             audio.tags["\xa9day"] = release_year(album)
             audio.tags["disk"] = [(disc_number, 1)]
             audio.tags["trkn"] = [(track_number, total_tracks)]
-            if args.comment is not None: audio.tags["\xa9cmt"] = comment
-            if args.grouping is not None: audio.tags["\xa9grp"] = grouping
+            if "comment": audio.tags["\xa9cmt"] = comment
+            if grouping: audio.tags["\xa9grp"] = grouping
             if genres is not None and genres: audio.tags["\xa9gen"] = ", ".join(genres)
             audio.save()
 
@@ -198,8 +269,8 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
             audio.tags[b"\xa9day"] = release_year(album)
             audio.tags["disk"] = [(disc_number, "1")]
             audio.tags["trkn"] = [(track_number, total_tracks)]
-            if args.comment is not None: audio.tags[b"\xa9cmt"] = comment
-            if args.grouping is not None: audio.tags[b"\xa9grp"] = grouping
+            if comment: audio.tags[b"\xa9cmt"] = comment
+            if grouping: audio.tags[b"\xa9grp"] = grouping
             if genres is not None and genres: audio.tags[b"\xa9gen"] = ", ".join(genres)
             audio.save()
 
@@ -264,10 +335,8 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
         print(Fore.YELLOW + "Setting release year: " + release_year(album) + Fore.RESET)
         if genres is not None and genres: print(Fore.YELLOW + "Setting genres: " + " / ".join(genres) + Fore.RESET)
         if image is not None: print(Fore.YELLOW + "Adding cover image" + Fore.RESET)
-        if args.comment is not None:
-            print(Fore.YELLOW + "Adding comment: " + comment + Fore.RESET)
-        if args.grouping is not None:
-            print(Fore.YELLOW + "Adding grouping: " + grouping + Fore.RESET)
+        if comment: print(Fore.YELLOW + "Adding comment: " + comment + Fore.RESET)
+        if grouping: print(Fore.YELLOW + "Adding grouping: " + grouping + Fore.RESET)
         match ext:
             case "flac":
                 bit_rate = ((audio.info.bits_per_sample * audio.info.sample_rate) * audio.info.channels)
@@ -348,3 +417,5 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
         '''
     except id3.error:
         print(Fore.YELLOW + "Warning: exception while saving id3 tag: " + str(id3.error) + Fore.RESET)
+    except Exception as e: print(Fore.YELLOW + "Warning: exception while saving tag: " + type(e) + Fore.RESET)
+

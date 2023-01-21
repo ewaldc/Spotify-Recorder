@@ -5,7 +5,7 @@ import pyaudiowpatch as pyaudio
 from colorama import Fore
 from lib.utils import print_str
 import time
-import PyWave
+from lib.PyWave import Wave
 import sys, shutil #,threading #, platform
 
 class AudioRecorder:
@@ -41,8 +41,9 @@ class AudioRecorder:
             self.wave_file.write(in_data)
             return (in_data, pyaudio.paContinue)
 
-        format = PyWave.WAVE_FORMAT_IEEE_FLOAT if self.format == pyaudio.paFloat32 else PyWave.WAVE_FORMAT_PCM
-        self.wave_file = PyWave.open(audio_file, mode = "w", channels = self.channels,
+        format = Wave.WAVE_FORMAT_IEEE_FLOAT if self.format == pyaudio.paFloat32 else Wave.WAVE_FORMAT_PCM
+        
+        self.wave_file = Wave(audio_file, mode = "w", channels = self.channels,
             frequency = self.rate, bits_per_sample = self.sample_size << 3, format = format)
 
         self.stream = self.pa.open(format = self.format, channels = self.channels, rate = self.rate, frames_per_buffer = self.sample_size,
@@ -50,8 +51,9 @@ class AudioRecorder:
         self.stream.start_stream()
     
     def stop_recording(self, duration):
-        time.sleep(duration) # Blocking execution while playing
-        while self.recorder.web.is_playing(): time.sleep(0.1)
+        if duration >= 2.0:
+            time.sleep(duration - 2.0) # Blocking execution while playing
+            while self.recorder.web.is_playing(): time.sleep(0.2)
         self.stream.stop_stream()
         self.stream.close()
         self.wave_file.close()

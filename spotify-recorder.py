@@ -7,7 +7,6 @@ import os, platform, sys, signal, select, psutil
 from colorama import init, Fore, AnsiToWin32
 from lib.recorder import SportifyRecorder
 from lib.utils import *
-from lib.tags import cover_size_list
 from dotenv import load_dotenv
 import argparse
 import pkg_resources
@@ -18,16 +17,32 @@ import schedule
 codec_list = ["flac", "aac", "opus", "mp3", "vorbis", "ac3", "pcm"]
 recording_format_list = ["PCM:8", "PCM:16", "PCM:24", "PCM:32", "IEEE_FLOAT"]
 
+playlist_create_choices = {"type", "path-type", "path", "target-directory", "source-directory"}
+playlist_create_type_choices = {"m3u", "wpl"}
+playlist_create_type_choices = {"absolute", "relative"}
+playlist_create_defaults = {"type":"m3u", "path-type":"relative", "target-directory":"."}
+
+tags_choices = {"action", "comment", "cover", "cover-size", "grouping"}
+tags_action_choices = {"set", "get", "update"}
+tags_cover_size_choices = {"large","medium","small"}
+tags_defaults = {"action":"set", "cover":"embed", "cover-size":"large"}
+
 if sys.version_info >= (3, 0): import configparser as ConfigParser
 else: import ConfigParser
 
 # create a keyvalue class
 class keyvalue(argparse.Action):
-    def __call__( self , parser, namespace, values, option_string = None):
+    def __call__(self, parser, namespace, values, option_string = None):
         setattr(namespace, self.dest, dict())
+        _key_choices = self.dest + '_choices'
         for value in values: 
-            key, *data = value.split('=')                # split it into key and value
-            getattr(namespace, self.dest)[key] = '='.join(data)     # assign into dictionary
+            if not '=' in value: return
+            key, data = value.split('=',1) # split it into key and value
+            key = key.lower()
+            if _key_choices not in locals() or key in vars()[_key_choices]:
+                _value_choices = self.dest + "_" + key.replace('-', "_") + '_choices'
+                if _value_choices not in locals() or data in vars()[_value_choices]:
+                    getattr(namespace, self.dest)[key] = data #'='  #.join(data)     # assign into dictionary
 
 def load_config(defaults):
     if not load_dotenv(): # load .env file in current directory
@@ -96,7 +111,7 @@ def partial_check_type(v):
     import re
     try: return re.match("^weak:[0-9]+$", v).group(0)
     except:
-        raise argparse.ArgumentTypeError("String '" + v + "' does not match none, weak, weak:<sec>, strict")
+        raise argparse.ArgumentTypeError("String '" + v + "' does not match none, weak, weak:<%>, strict")
 
 def main(prog_args=sys.argv[1:]):
     # in case we changed the location of the settings directory where the
@@ -108,13 +123,7 @@ def main(prog_args=sys.argv[1:]):
         help='Path to settings, config and temp files directory [Default=~/.spotify-recorder]')
     args, remaining_argv = settings_parser.parse_known_args(prog_args)
     init_util_globals(args)
-    #defaults = {
-     #   "bitrate": "320",
-     #   "quality": "320",
-     #   "comp": "10",
-     #   "vbr": "0",
-     #   "partial_check": "weak",
-    #}
+  
     defaults = load_config({})   # load config file, overwriting any defaults
 
     parser = argparse.ArgumentParser(
@@ -148,7 +157,7 @@ def main(prog_args=sys.argv[1:]):
     try: prog_version = pkg_resources.require("spotify-recorder")[0].version
     except (pkg_resources.DistributionNotFound) as err: prog_version = "1.0"
 
-    parser.add_argument('-a', '--ascii', default=False, #action='store_true',
+    parser.add_argument('--ascii', action='store_true', default=False,
         help='Convert the file name and the metadata tags to ASCII encoding [Default=utf-8]')
     parser.add_argument('--all-artists', action='store_true',
         help='Store all artists, rather than just the main artist, in the track\'s metadata tag')
@@ -158,7 +167,7 @@ def main(prog_args=sys.argv[1:]):
     parser.add_argument('--artist-album-market',
         help='Only load albums with the specified ISO2 country code when '
              'passing a Spotify artist URI. You may get duplicate albums if not set. [Default=any]')
-    parser.add_argument('-A', '--ascii-path-only', action='store_true',
+    parser.add_argument('--ascii-path-only', action='store_true',
         help='Convert the file name (but not the metadata tags) to ASCII encoding [Default=utf-8]')
     '''
     bitrate_group = parser.add_mutually_exclusive_group(required=False)
@@ -174,14 +183,7 @@ def main(prog_args=sys.argv[1:]):
     parser.add_argument('--comp',
         help='compression complexity for FLAC and Opus [Default=Max]')
     '''
-    parser.add_argument('--comment',
-        help='Set comment metadata tag to all songs. Can include same tags as --format.')
-    parser.add_argument('--cover', nargs='+', choices=['file', 'embed'], default=['embed'],
-        help='Save album cover image to file name (e.g "cover.jpg") [Default="embed"]')
-    parser.add_argument('--cover-file', nargs=1, 
-        help='Cover image (relative) file name (e.g "cover.jpg")')
-    parser.add_argument('--cover-size', nargs=1, choices=cover_size_list, default='large',
-        help="Size of covert art ('small', 'medium', 'large') [Default='large' (640x640)]")
+
     parser.add_argument('-d', '--directory',
         help='Base directory where recorded files are saved [Default=cwd]')
     parser.add_argument('-e','--encode', nargs='+', default=[], action='store', choices=codec_list,
@@ -193,7 +195,7 @@ def main(prog_args=sys.argv[1:]):
             if s.startsWith(prefix): return str(s)
         return None
     '''
-
+    parser.choices = codec_list
     parser.add_argument('--codec_args', nargs='+', action = keyvalue,
         help='List of audio encoder arguments to be used for ffmpeg') #, type=encoderArg
     parser.add_argument('--codec_containers', nargs='+', action = keyvalue,
@@ -213,8 +215,6 @@ def main(prog_args=sys.argv[1:]):
         help='Convert all words of the file name to upper-case, lower-case, or capitalized')
     parser.add_argument('-g', '--genres', choices=['artist', 'album'],
         help='Attempt to retrieve genre information from Spotify\'s Web API [Default=skip]')
-    parser.add_argument('--grouping',
-        help='Set grouping metadata tag to all songs. Can include same tags as --format.')
     encoding_group.add_argument('--id3-v23', action='store_true',
         help='Store ID3 tags using version v2.3 [Default=v2.4]')
     group.add_argument('-u', '--user', help='Spotify username')
@@ -229,27 +229,47 @@ def main(prog_args=sys.argv[1:]):
         help='Normalize volume levels of tracks')
     parser.add_argument('-na', '--normalized-ascii', action='store_true',
         help='Convert the file name to normalized ASCII with unicodedata.normalize (NFKD)')
-    parser.add_argument('--partial-check', metavar="{none,weak,weak:<sec>,strict}", type=partial_check_type, default="weak:3",
+    parser.add_argument('--partial-check', metavar="{none,weak,weak:<%>,strict}", type=partial_check_type, default="weak",
         help='Check for and overwrite partially recorded files. "weak" will '
-             'err on the side of not re-recording the file if it is unsure, '
-             'whereas "strict" will re-record the file.  You can override the '
-             'number of seconds of wiggle-room for the "weak" check using '
-             '"weak:<sec>" [Default=weak:3]')
+            'err on the side of not re-recording the file if it is unsure (up to 2% deviation), '
+            'whereas "strict" will re-record the file.  You can fine-tune the amount of deviation in % of reference audio playback length'
+            'for the "weak" check using "weak:<%s>" [Default=weak]')
     parser.add_argument('--play-token-resume', metavar="RESUME_AFTER",
         help='If the \'play token\' is lost to a different device using '
-             'the same Spotify account, the script will wait a speficied '
-             'amount of time before restarting. This argument takes the same '
-             'values as --resume-after [Default=abort]')
+            'the same Spotify account, the script will wait a speficied '
+            'amount of time before restarting. This argument takes the same '
+            'values as --resume-after [Default=abort]')
     parser.add_argument('--playlist', action='store_true', default=None,
         help='Record the named playlist. In this case no uri specifier is needed or if provided, it will be ignored')
+    
+    parser.add_argument('--playlist-create', nargs='+', action = keyvalue, #(parser, dest="playlist_create", option_strings=playlist_create_options), 
+        help='Create a m3u/wpl playlist file using a series of options'
+            'type="m3u"|"wpl": type of playlist (default: "m3u")'
+            'path-type="relative"|"absolute": path type (default: "relative")'
+            'path="<path-name-formatted>": path prefix (see README for path name formatting) to use for relative playlists (Default=absolute or relative path from current directory based on path-type)'
+            'target-directory="<directory>": path (with {ext} replaced by codec extention) to use storing the generated playlist (Default=current directory)'
+            'source-directory="<directory>": creates the playlist from files in this directory (default: current directory) matching the container extension (see README for path name formatting)')
+
+    parser.add_argument('--tags', nargs='+', action = keyvalue, #(parser, dest="playlist_create", option_strings=playlist_create_options), 
+        help='Set, check or update tags/metadata on encoded audio files'
+            'action="set|check|update: set, check or update metadata on existing or recorder and encoded files [default="set"]'
+            'comment=<comment>: set comment metadata tag for all songs. Can include same tags as --format'
+            'cover="<file name>|embed": save album cover image to file name (e.g "cover.jpg") [default="embed"]'
+            'cover-size="small|medium|large": size of covert art [default="large" (640x640)]'
+            'grouping=<formatted text>: set grouping metadata tag to all songs. Can include same tags as --format.')
+
+    '''
     parser.add_argument('--playlist-create', choices=['m3u', 'm3u:absolute', 'wpl'],
         help='Create a m3u/wpl playlist file with relative paths by default')
-    parser.add_argument('--playlist-directory',
-        help='Creates the playlist file in another directory [Default=current directory]')
     parser.add_argument('--playlist-relative-path',
         help='Relative path prefix (see README for path name formatting) to use for relative playlists [Default=relative path from current directory]')
+    parser.add_argument('--playlist-create-directory',
+        help='Creates the playlist file in another directory [Default=current directory]')
+    parser.add_argument('--playlist-create-from-directory',
+        help='Creates the playlist from all files in the source directory tree')
     parser.add_argument('--playlist-sync', action='store_true',
         help='Sync playlist songs (rename and remove old songs)')
+    '''
     parser.add_argument('--remove-from-playlist', action='store_true',
         help='[WARNING: SPOTIFY IS NOT PROPROGATING PLAYLIST CHANGES TO '
              'THEIR SERVERS] Delete tracks from playlist after successful recording [Default=no]')
@@ -270,13 +290,11 @@ def main(prog_args=sys.argv[1:]):
     parser.add_argument('--stop-after',
         help='Stops script after a certain amount of time has passed (e.g. 1h30m).'
              'Alternatively, accepts a specific time in 24hr format to stop after (e.g 03:30, 16:15)')
-    parser.add_argument('--update-metadata', action='store_true', default=None,
-        help='Attempt to update metadata on existing files from Spotify\'s Web API')
     parser.add_argument('-V', '--version', action='version', version=prog_version)
     parser.add_argument('-y', '--overwrite', action='store_true', help='Overwrite existing output files [Default=skip]')
 
-    parser.add_argument('uri', nargs="+",
-        help='One or more Spotify URI(s) (either URI, a file of URIs or a search query)')
+    parser.add_argument('uri', nargs="*",
+        help='Zero or more Spotify URI(s) (either URI, a file of URIs or a search query)')
     parser.set_defaults(**defaults)
     args = parser.parse_args(remaining_argv)
 
@@ -300,6 +318,20 @@ def main(prog_args=sys.argv[1:]):
     else: init(strip=True if args.strip_colors else None)
     if args.ascii_path_only is True: args.ascii = True
 
+    # Set defaults 
+    def set_defaults(argument, choices, defaults):
+        for choice in choices:
+            if not argument.get(choice):
+                argument[choice]  = defaults.get(choice, "") 
+
+    if args.playlist_create: set_defaults(args.playlist_create, playlist_create_choices, playlist_create_defaults)
+    if args.tags is None: args.tags = dict()
+    set_defaults(args.tags, tags_choices, tags_defaults)
+    '''
+        for choice in playlist_create_choices:
+            if not args.playlist_create.get(choice):
+                args.playlist_create[choice]  = playlist_create_defaults.get(choice, "") 
+    '''
     # unless explicitly told not to, we are going to encode for utf-8 by default
     if not args.ascii and sys.version_info < (3, 0):
         sys.stdout = codecs.getwriter('utf-8')(sys.stdout)
@@ -440,8 +472,8 @@ def main(prog_args=sys.argv[1:]):
     print(Fore.YELLOW + "  Process priority:\t\t" + Fore.RESET + str(p.nice()))
 
     # patch a bug when Python 3/MP4
-    if sys.version_info >= (3, 0) : #and (args.output_type == "m4a" or args.output_type == "alac.m4a")
-        patch_bug_in_mutagen()
+    #if sys.version_info >= (3, 0) : #and (args.output_type == "m4a" or args.output_type == "alac.m4a")
+    #    patch_bug_in_mutagen()
         
     recorder = SportifyRecorder(args)
     recorder.run() # Start Recording thread

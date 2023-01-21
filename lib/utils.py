@@ -26,6 +26,13 @@ def enc_str(_str):
 def path_exists(path):
     return os.path.exists(enc_str(path))
 
+def get_alternative_file(file, trackinfo, ext):
+    return os.path.abspath(os.path.join(os.path.dirname(file), get_track_artist(trackinfo) + ' - ' + to_ascii(escape_filename_part(trackinfo["name"] + '.' + ext))))
+
+def get_track_artist(track):
+    return to_ascii(escape_filename_part(track['artists'][0]['name']))
+    return os.path.exists(enc_str(path))
+
 def print_str(_str):
     """print without newline"""
     if not get_args().has_log:
@@ -60,12 +67,14 @@ def to_ascii(_str, on_error='ignore'):
             return str(_str, "utf-8")
         elif isinstance(_str, str) and args.ascii:
             return _str.encode("ascii", on_error).decode("utf-8")
+#        elif isinstance(_str, str): return _str.encode("utf-8")
         else: return _str
     else:
         if isinstance(_str, str) and not args.ascii:
             return unicode(_str, "utf-8")
         elif isinstance(_str, unicode) and args.ascii:
             return _str.encode("ascii", on_error).decode("utf-8")
+#        elif isinstance(_str, str): return _str.encode("utf-8")
         else: return _str
 
 def to_normalized_ascii(_str):
@@ -91,8 +100,7 @@ def settings_dir():
 
 def base_dir():
     args = get_args()
-    return norm_path(args.directory) if args.directory is not None \
-        else os.getcwd()
+    return norm_path(args.directory) if args.directory is not None else os.getcwd()
         
 def is_unavailable(country, track):
     if 'is_playable' in track: return not track['is_playable']
@@ -130,7 +138,7 @@ def get_ext(args, codec):
     return args.codec_containers[codec] if args.codec_containers and args.codec_containers[codec] else encoder_default_container[codec]
 
 def get_track_name(track):
-    name = track["name"].split("-")
+    name = track["name"].split("- ")
     length = len(name)
     track_name = name[0].strip()
     if length > 1:
@@ -147,7 +155,6 @@ def get_track_artist(track):
 def format_track_string(recorder, format_string, idx, track, ext):
     args = get_args()
     idx_str = str(idx + 1)
-    #current_playlist = recorder.current_playlist
     artists = track['artists']
     track_name = get_track_name(track)
     track_num = str(track['track_number'])
@@ -171,7 +178,7 @@ def format_track_string(recorder, format_string, idx, track, ext):
         playlist_name = "No Playlist"
         playlist_owner = "No Playlist Owner"
 
-    release_date = to_ascii(escape_filename_part(album['release_date']))
+    release_date = escape_filename_part(album['release_date'])
     release_date_precision = to_ascii(escape_filename_part(album['release_date_precision']))
     year = release_date if (release_date_precision == 'year') else release_date.split('-')[0]
 
@@ -208,7 +215,6 @@ def format_track_string(recorder, format_string, idx, track, ext):
         "username": user,
         "feat_artists": featuring_artists,
         "featuring_artists": featuring_artists,
-        "track_uri": track_uri,
         "uri": track_uri,
         #"custom": args.custom_format
     }
@@ -217,7 +223,7 @@ def format_track_string(recorder, format_string, idx, track, ext):
     paren_tags = {"track_name", "track"}
     substr_tags = {"artist"}
     for tag in tags.keys():
-        format_string = format_string.replace("{" + tag + "}", tags[tag])
+        format_string = format_string.replace("{" + tag + "}", to_ascii(tags[tag]))
         if tag in substr_tags:
             match = re.search(r"\{" + tag + r":\d+[lL]\}", format_string)
             if match:
@@ -259,7 +265,7 @@ def format_track_string(recorder, format_string, idx, track, ext):
         elif args.format_case == "lower": format_string = format_string.lower()
         elif args.format_case == "capitalize":
             format_string = ' '.join(word[0].upper() + word[1:] for word in format_string.split())
-    return format_string
+    return to_ascii(format_string)
 
 # returns path of executable
 def which(program):
@@ -330,37 +336,50 @@ def format_size(size, short=False):
         return "{0:>3s}{1}".format(str_value, suffix)
 
 # returns true if audio_file is a partial of track
-def is_partial(audio_file, track_duration_ms):
+def is_partial(audio_file, track_duration_ms, alt_audio_file = None):
     args = get_args()
     if args.partial_check == "none": return False
+    
+    def _is_partial(file):
+        if args.partial_check == "strict":
+            return track_duration_ms > audio_file_duration_ms
+        # for 'weak' the setting is 2% wiggle-room
+        wiggle_room = track_duration_ms * 0.02 if args.partial_check == "weak" \
+            else float(args.partial_check.split(":")[1]) * track_duration_ms / 100
+        _isPartial = (abs(track_duration_ms - audio_file_duration_ms) > wiggle_room) or audio_file_duration == 0
+        if _isPartial:
+            print(Fore.MAGENTA + 'Duration deviation encountered above threshold for audio file: ' + Fore.CYAN + file + Fore.RESET)
+        return _isPartial
 
-    def audio_file_duration(audio_file):
+    def get_audio_file_duration(audio_file):
         if (path_exists(audio_file)):
-            _file = mutagen.File(audio_file)
-            if _file is not None and _file.info is not None:
-                return _file.info.length, _file.info.length * 1000
-        return None, 0
+            try: 
+                _file = mutagen.File(audio_file)
+                if _file is not None and _file.info is not None:
+                    return _file.info.length, _file.info.length * 1000
+            except KeyboardInterrupt: raise
+            except Exception as e:
+                print(Fore.RED + 'Exception encountered (' + str(e) + ') - unable to get duration from (corrupt ?) audio file: ' + Fore.CYAN + audio_file + Fore.RESET)
+        return 0, 0
 
-    audio_file_duration, audio_file_duration_ms = audio_file_duration(audio_file)
-
-    # for 'weak', give a ~1.5 second wiggle-room
-    if args.partial_check == "strict":
-        return (audio_file_duration is None or track_duration_ms > audio_file_duration_ms)
-    else:
-        wiggle_room = max((track_duration_ms * 0.01), 3000) if args.partial_check == "weak" \
-            else int(args.partial_check.split(":")[1]) * 1000
-        return (audio_file_duration is not None and (track_duration_ms - wiggle_room) > audio_file_duration_ms)
+    audio_file_duration, audio_file_duration_ms = get_audio_file_duration(audio_file)
+    if audio_file_duration_ms == 0:
+        if alt_audio_file:
+            audio_file_duration, audio_file_duration_ms = get_audio_file_duration(alt_audio_file)
+            if audio_file_duration_ms == 0: return True
+            print(Fore.MAGENTA + 'Renaming legacy audio file: ' + Fore.CYAN + alt_audio_file + Fore.YELLOW + ' to: ' + Fore.CYAN + audio_file + Fore.RESET)
+            os.rename(alt_audio_file, audio_file)
+            return _is_partial(audio_file)
+        return True
+    return _is_partial(audio_file)
 
 # borrowed from eyeD3
 def format_time(seconds, total=None, short=False):
     """
     Format ``seconds`` (number of seconds) as a string representation.
     When ``short`` is False (the default) the format is:
-
         HH:MM:SS.
-
     Otherwise, the format is exacly 6 characters long and of the form:
-
         1w 3d
         2d 4h
         1h 5m

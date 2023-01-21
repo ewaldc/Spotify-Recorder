@@ -7,7 +7,7 @@ from spotipy.oauth2 import SpotifyOAuth
 #import spotipy.client
 #import spotipy.util as util
 import os, time
-import requests
+import requests, json
 import csv
 import re
 
@@ -109,8 +109,9 @@ class WebAPI(object):
         res = requests.get(url, headers = {'Content-Type':'application/json', \
               'Authorization': 'Bearer {}'.format(self.get_token())})
         if res.status_code == 200: return res
-        else: print(Fore.YELLOW + "URL returned non-200 HTTP code: " +
-            str(res.status_code) + Fore.RESET)
+        else:
+            print(Fore.RED + "URL returned non-200 HTTP code: " + str(res.status_code) + Fore.RESET)
+            sys.exit(10)
         return None
 
     def api_url(self, url_path):
@@ -134,11 +135,6 @@ class WebAPI(object):
         # check for cached result
         cached_result = self.get_cached_result("tracks", id)
         if cached_result is not None: return cached_result
-
-        # extract track id from uri
-        #uri_tokens = uri.split(':')
-        #if len(uri_tokens) != 3: return []
-        #track = self.spotify.track(uri_tokens[2])
         track = self.spotify.track(id)
 
         self.cache_result("tracks", id, track)
@@ -190,7 +186,8 @@ class WebAPI(object):
             if offset == 0: count = res['total']
             for playlist in res['items']:
                  if playlist['name'] == name:
-                    print(Fore.YELLOW + "Playlist with name " + name + " found: " + playlist["uri"] + Fore.RESET)
+                    print(Fore.GREEN + "Playlist with name " + name + " found: " + playlist["uri"] + Fore.RESET)
+                    self.recorder.playlist = playlist
                     self.recorder.playlist_name = name
                     self.recorder.playlist_owner = playlist['owner']['display_name']
                     return playlist
@@ -208,6 +205,9 @@ class WebAPI(object):
             tracks_ids += [track['track']['id'] for track in tracks['items']]
         return tracks_ids
     '''
+    def search_tracks(self, pattern):
+        url = self.api_url('search?q=' + pattern + '&type=track&limit=1&offset=0')
+        return self.request_json(url, "search track by track name and artist name")
 
     def get_album_tracks(self, id):
         url = self.api_url('albums/' + id)
@@ -348,7 +348,12 @@ class WebAPI(object):
         return charts_obj
 
     def start_playback(self, device_id = None, context_uri = None, uris = None, offset = None, position_ms = None):
-        try: return self.spotify.start_playback(device_id = self.device_id, context_uri = context_uri, uris = uris, offset = offset, position_ms = position_ms)
+        try: 
+            url = self.api_url('me/player/play?device_id=' + self.device_id)
+            res = requests.put(url, headers = {'Content-Type':'application/json', 'Accept':'application/json',\
+              'Authorization': 'Bearer {}'.format(self.get_token())}, data=json.dumps({'uris': uris}))
+            time.sleep(1)   # Sleep 1 second, otherwise is_playing miht be False (needs 1 second play time)
+            return True if self.is_playing() else False
         except:
             print(Fore.RED + "Start Playback: Spotify Player not available, aborting..." + Fore.RESET)
             sys.exit(4)
