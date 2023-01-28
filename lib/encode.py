@@ -8,13 +8,13 @@ encoder_default_container = {
     "flac":"flac", "aac":"m4a", "opus":"opus", "mp3":"mp3", "vorbis":"ogg", "ac3":"ac3", "pcm":"wav"
 }
 encoder_default_args = {
-    "flac": "-af aformat=s16:48000 -compression_level 5",
+    "flac": "-c:a flac -af aformat=s16:48000 -compression_level 5",
     "aac":  "-c:a aac -b:a 320k",
-    "opus": "-c:a libopus -compression_level 10 -vbr on -b 96000",
+    "opus": "-c:a libopus -compression_level 10 -vbr on -b:a 96000",
     "mp3":  "-c:a libmp3lame -b:a 320k",
     "vorbis": "-c:a libvorbis -q:a 5",
     "ac3": "-c:a ac3 -b:a 320k",
-    "pcm": "-ar 48000 -ac 1 -f s16le"
+    "pcm": "-c:a pcm_f32le -ar 48000"  #IEEE float
 }
 
 def encode(args, codec, input_file, output_file):

@@ -18,12 +18,13 @@ class AudioRecorder:
         #self.stream = None
         device = pa.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
         if not device["isLoopbackDevice"]:
-            for loopback in pa.get_loopback_device_info_generator():
-                if device["name"] in loopback["name"]: device = loopback; break
-                else: sys.stdout.write(Fore.RED + 'No loopback output device found. Exiting... \n' + Fore.RESET); exit()
-        #for idx in range(wasapi_info["deviceCount"]):
-        #    device = self.pyaudio.get_device_info_by_host_api_device_index(wasapi_info["index"], idx)
-        #    if device["name"].startswith("Stereo Mix"): device = device; break 
+            def search_device(name, device_list):
+                for device in device_list:
+                    if name in device['name']: return device
+                return None
+            device = search_device(device["name"], pa.get_loopback_device_info_generator())
+            if device is None: sys.stdout.write(Fore.RED + 'No loopback output device found. Exiting... \n' + Fore.RESET); sys.exit(11)
+
         self.pa = pa
         self.device = device
         self.channels = device["maxInputChannels"]

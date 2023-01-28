@@ -135,7 +135,7 @@ class WebAPI(object):
         # check for cached result
         cached_result = self.get_cached_result("tracks", id)
         if cached_result is not None: return cached_result
-        track = self.spotify.track(id)
+        track = self.spotify.track(id, self.recorder.country)
 
         self.cache_result("tracks", id, track)
         return track

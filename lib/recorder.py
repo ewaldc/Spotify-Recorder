@@ -143,10 +143,9 @@ class SportifyRecorder(threading.Thread):
                     # Wait for all of them to finish
                     ext = get_ext(self.args, encoder)
                     output_file = self.format_track_path(idx, track_info, ext)
-                    alt_output_file = get_alternative_file(output_file, track_info, ext)
 
                     # before we skip or can fail loading the track
-                    if not args.overwrite and (path_exists(output_file) or path_exists(alt_output_file)):
+                    if not args.overwrite and (path_exists(output_file) or path_exists(get_alternative_file(output_file, track_info, ext))):
                         if is_partial(output_file, track_duration_ms, alt_output_file): 
                             print(Fore.YELLOW + "\"" + encoder + "\" encoder: Partial encoding found - overwriting: " + Fore.CYAN + output_file + Fore.RESET)
                             os.remove(output_file)
