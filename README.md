@@ -35,110 +35,27 @@ SPOTIPY_CLIENT_SECRET="<client secret>"
 SPOTIPY_REDIRECT_URI="http://www.purple.com/"
 ```
 
+Spotify-recorder uses *Ffmpeg* to encode the raw recordings which are saved in PCM 32 bit IEEE float format (.wav container) by default. 
+
 # Installation on Windows
 **The easiest way** to get started is to download a precompiled, zipped version from the ``releases`` folder
 
 Alternatively you can build your own copy from the sources in this repository:
 - Clone or download this repository
 - Install Python3 e.g. Python3.10.x.
-Portable Python is also working, just ensure ``%APPDIR%\Python3\App\Python`` and ``%APPDIR%\Python3\App\Python\Scripts`` are part of the user environment PATH setting (``%APPDIR%`` is the root of your portable apps directory).
-- Install ``Ffmpeg`` and make sure ffmpeg.exe is part of the PATH (edit environment variables e.g. ``%APPDIR%\AudioVideo\ffmpeg-5.1.2\bin``)
+The use of Portable Python is absolutely fine, just ensure ``%APPDIR%\Python3\App\Python`` and ``%APPDIR%\Python3\App\Python\Scripts`` are part of the user environment PATH setting (``%APPDIR%`` is the root of your portable apps directory).
+- Install [Ffmpeg](https://ffmpeg.org/download.html). It's possible to use a portable version, just make sure *ffmpeg.exe* is part of the PATH (edit environment variables e.g. ``%APPDIR%\AudioVideo\ffmpeg-5.1.2\bin``)
 - Open a Python Shell (typically PowerShell) to install the required dependencies:
 ```
 pip install mutagen psutil colorama pyaudiowpatch spotipy python-dotenv
 ```
-- Finally create a packaged Windows binary using ``pyinstaller`` in the current directory or directory of choice (distpath)
+- Optionally, you can create your personal packaged Windows binary using ``pyinstaller`` in the current directory or directory of choice (distpath)
 ```
 pyinstaller spotify-recorder.spec
 ```
 
 # Usage
 spotify-recorder is a command line tool only that takes many command-line options:
-
-spotify-recorder [-h] [-S SETTINGS] [--ascii] [--all-artists] [--artist-album-type ARTIST_ALBUM_TYPE]
-                 [--artist-album-market ARTIST_ALBUM_MARKET] [--ascii-path-only] [-d DIRECTORY] [-e CODECS] [--codec-args CODEC_ARGS]
-                 [--format ENCODER_FORMAT] [--fail-log FAIL_LOG] [-f FILENAME]
-                 [--filename-replace FILENAME_REPLACE [FILENAME_REPLACE ...]] [--filename-windows-safe]
-                 [--format-case {upper,lower,capitalize}] [-g {artist,album}] [--id3-v23] [-u USER] [-p PASSWORD] [-l] [-L LOG]
-                 [--normalize] [-na] [--partial-check {none,weak,weak:<%>,strict}] [--play-token-resume RESUME_AFTER] [--playlist]
-                 [--playlist-create PLAYLIST_CREATE [PLAYLIST_CREATE ...]] [--tags TAGS [TAGS ...]] [--remove-from-playlist]
-                 [--recording-format {PCM:8,PCM:16,PCM:24,PCM:32,IEEE_FLOAT}] [--recording {keep,skip}] [--search SEARCH] [--strip-colors]
-                 [--stereo-mode {j,s,f,d,m,l,r}] [--stop-after STOP_AFTER] [-V] [-y]
-                 [uri ...]
-
-positional arguments:
-  uri                   Zero or more Spotify URI(s) (either URI, a file of URIs or a search query)
-
-options:
-  -h, --help            show this help message and exit
-  -S SETTINGS, --settings SETTINGS
-                        Path to settings, config and temp files directory [Default=~/.spotify-recorder]
-  --ascii               Convert the file name and the metadata tags to ASCII encoding [Default=utf-8]
-  --all-artists         Store all artists, rather than just the main artist, in the track's metadata tag
-  --artist-album-type ARTIST_ALBUM_TYPE
-                        Only load albums of specified types when passing a Spotify artist URI [Default=album,single,ep,compilation,appears_on]
-  --artist-album-market ARTIST_ALBUM_MARKET
-                        Only load albums with the specified ISO2 country code when passing a Spotify artist URI. You may get duplicate albums if not set. [Default=any]
-  --ascii-path-only     Convert the file name (but not the metadata tags) to ASCII encoding [Default=utf-8]
-  -d DIRECTORY, --directory DIRECTORY
-                        Base directory where recorded files are saved [Default=cwd]
-  -e CODECS, --encode CODECS
-                        String containing one or a comma separated list of audio encoders to be used for post-processing the recorded tracks.-e|--encode option can be used multiple times as is "-e flac -e aac"Valid/supported codecs: flac, aac, opus, mp3, vorbis, ac3, pcm.
-  --codec-args CODEC_ARGS
-                        String in assignment form "<codec>=<codec-options>". Repeat --codec-args option for each codec as required.Example: --codec-args "flac=-af aformat=s16:48000" , --codec-args "opus=-vbr off"
-  --format ENCODER_FORMAT
-                        String in assignment form "<codec>=<format>". Repeat --format option for each codec as required.Example: --format "aac=m4a" , --format "opus=wbem"
-  --fail-log FAIL_LOG   Logs the list of track URIs that failed to record
-  -f FILENAME, --filename FILENAME
-                        Save songs using this path/filename format (see README)
-  --filename-replace FILENAME_REPLACE [FILENAME_REPLACE ...]
-                        pattern to replace the output filename separated by "/". The following example replaces all spaces with "_" and all "-" with ".":    spotify-recorder --replace " /_" "\-/." uri
-  --filename-windows-safe
-                        Make filename safe for Windows file system (eleimate invalid characters, truncate filename to 255 characters)
-  --format-case {upper,lower,capitalize}
-                        Convert all words of the file name to upper-case, lower-case, or capitalized
-  -g {artist,album}, --genres {artist,album}
-                        Attempt to retrieve genre information from Spotify's Web API [Default=skip]
-  --id3-v23             Store ID3 tags using version v2.3 [Default=v2.4]
-  -u USER, --user USER  Spotify username
-  -p PASSWORD, --password PASSWORD
-                        Spotify password [Default=ask interactively]
-  -l, --last            Use last login credentials
-  -L LOG, --log LOG     Log in a log-friendly format to a file (use - to log to stdout)
-  --normalize           Normalize volume levels of tracks
-  -na, --normalized-ascii
-                        Convert the file name to normalized ASCII with unicodedata.normalize (NFKD)
-  --partial-check {none,weak,weak:<%>,strict}
-                        Check for and overwrite partially recorded files. "weak" will err on the side of not re-recording the file if it is unsure (up to 5% deviation), whereas "strict" will re-record the file.  You can fine-tune the amount of deviation in % of reference audio playback lengthfor the "weak" check using "weak:<%s>" [Default=weak]
-  --play-token-resume RESUME_AFTER
-                        If the 'play token' is lost to a different device using the same Spotify account, the script will wait a speficied amount of time before restarting. This argument takes the same values as --resume-after [Default=abort]
-  --playlist            Record the named playlist. In this case no uri specifier is needed or if provided, it will be ignored
-  --playlist-create PLAYLIST_CREATE [PLAYLIST_CREATE ...]
-                        Create a m3u/wpl playlist file using a series of optionstype="m3u"|"wpl": type of playlist (default: "m3u")path-type="relative"|"absolute": path type (default: "relative")path="<path-name-formatted>": path prefix (see README for path name formatting) to use for relative playlists (Default=absolute or relative path from current directory based on path-type)target-directory="<directory>": path (with {ext} replaced by codec extention) to use storing the generated playlist (Default=current directory)source-directory="<directory>": creates the playlist from files in this directory (default: current directory) matching the container extension (see README for path name formatting)
-  --tags TAGS [TAGS ...]
-                        Set, check or update tags/metadata on encoded audio filesaction="set|check|update: set, check or update metadata on existing or recorder and encoded files [default="set"]comment=<comment>: set comment metadata tag for all songs. Can include same tags as --formatcover="<file name>|embed": save album cover image to file name (e.g "cover.jpg") [default="embed"]cover-size="small|medium|large": size of covert art [default="large" (640x640)]grouping=<formatted text>: set grouping metadata tag to all songs. Can include same tags as --format.
-  --remove-from-playlist
-                        [WARNING: SPOTIFY IS NOT PROPROGATING PLAYLIST CHANGES TO THEIR SERVERS] Delete tracks from playlist after successful recording [Default=no]
-  --recording-format {PCM:8,PCM:16,PCM:24,PCM:32,IEEE_FLOAT}
-                        Raw (lossless) recording format to use. Select from: "PCM:8", "PCM:16", "PCM:24", "PCM:32", "IEEE_FLOAT". The default format is IEEE_FLOAT with WAV container format
-  --recording {keep,skip}
-                        "keep": Keep raw temporary (lossless) PCM/WAV files from recordings."skip": Skip all recording and encodeing operations e.g. to just create a playlist
-  --search SEARCH       Search given folder name (see README for folder name formatting) recursively for encoded recording and create a symlink to this file (given permissions) if found to avoid duplication
-  --strip-colors        Strip coloring from terminal output [Default=colors]
-  --stereo-mode {j,s,f,d,m,l,r}
-                        Advanced stereo settings for Lame MP3 encoder only
-  --stop-after STOP_AFTER
-                        Stops script after a certain amount of time has passed (e.g. 1h30m).Alternatively, accepts a specific time in 24hr format to stop after (e.g 03:30, 16:15)
-  -V, --version         show program's version number and exit
-  -y, --overwrite       Overwrite existing output files [Default=skip]
-
-Example usage:
-    record a single track/file (PCM IEEE float with "wav" format/extension in current directory): spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR
-    record a single track/file (FLAC encoded with "flac" format/extension in current directory): spotify-recorder -e "flac" spotify:track:52xaypL0Kjzk0ngwv3oBPR
-    record a single track/file (OPUS encoded with "opus" format/extension in current directory): spotify-recorder -e "opus"  spotify:track:52xaypL0Kjzk0ngwv3oBPR
-    record entire playlist: spotify-recorder spotify:user:username:playlist:4vkGNcsS8lRXj4q945NIA4
-    record entire album: spotify-recorder spotify:user:username:album:29tvPtFTZwxZZMIA34BjYm
-    record a list of URIs contained in a file: spotify-recorder list_of_uris.txt
 
 spotify-recorder [-h|--help] [-S|--settings SETTINGS]
                 [-a|--ascii] [--all-artists] [--artist-album-type ARTIST_ALBUM_TYPE]
@@ -229,8 +146,9 @@ positional arguments:
       --update-metadata       Attempt to update metadata on existing files from Spotify's Web API
       -V|--version            Show program's version number and exit
 
-    Examples:
-- record a single file using user from API keys: <br>*spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR*
+ # Examples
+- record a single track using user from API keys. The audio file in 32 bit IEEE float PCM (.wav container) can be found at "%USERPROFILE%\AppData\Local\Temp" and will be named: "<artist name> - <track name>.wav". From there you can encode it using e.g. ffmpeg: <br>*spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR*
+- record a single track using user from API keys. The audio file in 32 bit IEEE float PCM (.wav container) can be found at "%USERPROFILE%\AppData\Local\Temp" and will be named: "<artist name> - <track name>.wav". From there you can encode it using e.g. ffmpeg: <br>*spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR*
 - record entire playlist from playlist URI: <br>*spotify-recorder spotify:playlist:4vkGNcsS8lRXj4q945NIA4*
 - record entire named playlist: <br>*spotify-recorder --playlist myplaylist*
 - record a list of URIs from text file: <br>*spotify-recorder list_of_uris.txt*
