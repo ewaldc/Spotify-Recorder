@@ -137,7 +137,7 @@ options:
 ```
 
  # Examples
-- record a single track using user from API keys. The audio file will use the defaukt codec (32 bit IEEE float PCM) with the default ".wav" format/container) and will located in the current directory.  The temporary raw recording can be found at ``%USERPROFILE%\AppData\Local\Temp`` and will be named: ``<artist name> - <track name>.wav``. From there you can encode it using e.g. ffmpeg: <br>*spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR*
+- record a single track using user from API keys. Once raw recoriding complete, encode the audio file using the default codec (PCM, 32 bit IEEE float) as well as the default PCM format/container (.wav). The output file will be located in the current directory.  The temporary, raw recording can be found at ``%USERPROFILE%\AppData\Local\Temp`` and will be named: ``<artist name> - <track name>.wav``. From there you can encode it using e.g. ffmpeg: <br>*spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR*
 - record a single track using user from API keys and encode it using the "flac" codec. The raw audio file in 32 bit IEEE float PCM (.wav container) can be found at ``%USERPROFILE%\AppData\Local\Temp`` and will be named: ``<artist name> - <track name>.wav``. From there you can encode it using e.g. ffmpeg: <br>*spotify-recorder -e "flac" spotify:track:52xaypL0Kjzk0ngwv3oBPR*
 - record entire playlist from playlist URI: <br>*spotify-recorder spotify:playlist:4vkGNcsS8lRXj4q945NIA4*
 - record entire named playlist: <br>*spotify-recorder --playlist myplaylist*
