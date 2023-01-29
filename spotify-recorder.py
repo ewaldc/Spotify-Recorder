@@ -14,12 +14,18 @@ import schedule
 #import tty
 #import termios
 
-codec_list = ["flac", "aac", "opus", "mp3", "vorbis", "ac3", "pcm"]
+global codecs_choices, codecs_args_choices, format_choices
+global playlist_create_choices, playlist_create_type_choices, playlist_create_path_type_choices
+global tags_choices, tags_action_choices, tags_cover_size_choices, tags_defaults
+codecs_choices = ["flac", "aac", "opus", "mp3", "vorbis", "ac3", "pcm"]
+codecs_args_choices = codecs_choices
+format_choices = codecs_choices
+
 recording_format_list = ["PCM:8", "PCM:16", "PCM:24", "PCM:32", "IEEE_FLOAT"]
 
 playlist_create_choices = {"type", "path-type", "path", "target-directory", "source-directory"}
 playlist_create_type_choices = {"m3u", "wpl"}
-playlist_create_type_choices = {"absolute", "relative"}
+playlist_create_path_type_choices = {"absolute", "relative"}
 playlist_create_defaults = {"type":"m3u", "path-type":"relative", "target-directory":"."}
 
 tags_choices = {"action", "comment", "cover", "cover-size", "grouping"}
@@ -31,18 +37,45 @@ if sys.version_info >= (3, 0): import configparser as ConfigParser
 else: import ConfigParser
 
 # create a keyvalue class
+class keylist(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string = None):
+        if not getattr(namespace, self.dest): setattr(namespace, self.dest, [])  # Initialize at first occurance of argument
+        _value_choices = globals().get(self.dest + '_choices')
+        for value in values[0].split(','): 
+            _value = value.lstrip()
+            if _value_choices is None or _value in _value_choices: getattr(namespace, self.dest).append(_value) # assign into dictionary
+            else: raise argparse.ArgumentTypeError('Value "' + _value + '" must be in ' + str(_value_choices))
+
 class keyvalue(argparse.Action):
     def __call__(self, parser, namespace, values, option_string = None):
-        setattr(namespace, self.dest, dict())
-        _key_choices = self.dest + '_choices'
+        if getattr(namespace, self.dest) is None: setattr(namespace, self.dest, dict())
+        _key_choices = globals().get(self.dest + '_choices')
         for value in values: 
             if not '=' in value: return
-            key, data = value.split('=',1) # split it into key and value
+            key, value = value.split('=',1) # split it into key and value
             key = key.lower()
-            if _key_choices not in locals() or key in vars()[_key_choices]:
-                _value_choices = self.dest + "_" + key.replace('-', "_") + '_choices'
-                if _value_choices not in locals() or data in vars()[_value_choices]:
-                    getattr(namespace, self.dest)[key] = data #'='  #.join(data)     # assign into dictionary
+            if _key_choices is None or key in _key_choices:
+                _value_choices = globals().get(self.dest + "_" + key.replace('-', "_") + '_choices')
+                if _value_choices is None or value in _value_choices:
+                    getattr(namespace, self.dest)[key] = value #'='  #.join(data)     # assign into dictionary
+                else: raise argparse.ArgumentTypeError('Value "' + value + '" must be in ' + str(_value_choices))
+            else: raise argparse.ArgumentTypeError('Key "' + key + '" must be in ' + str(_key_choices))
+
+class keyvaluelist(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string = None):
+        setattr(namespace, self.dest, dict())
+        _key_choices = globals().get(self.dest + '_choices')
+        for value in values[0].split(','): 
+            if not '=' in value: return
+            value = value.lstrip()
+            key, value = value.split('=',1) # split it into key and value
+            key = key.lower()
+            if _key_choices is None or key in _key_choices:
+                _value_choices = globals().get(self.dest + "_" + key.replace('-', "_") + '_choices')
+                if _value_choices is None or value in _value_choices:
+                    getattr(namespace, self.dest)[key] = value #'='  #.join(data)     # assign into dictionary
+                else: raise argparse.ArgumentTypeError('Value "' + value + '" must be in ' + str(_value_choices))
+            else: raise argparse.ArgumentTypeError('Key "' + key + '" must be in ' + str(_key_choices))
 
 def load_config(defaults):
     if not load_dotenv(): # load .env file in current directory
@@ -50,6 +83,10 @@ def load_config(defaults):
         sys.exit(2)
 
     _settings_dir = settings_dir()
+    if not os.path.exists(_settings_dir):
+        print(Fore.GREEN + "First time initialization - creating settings directory at: " + Fore.CYAN + _settings_dir + Fore.RESET)
+        os.makedirs(_settings_dir)
+
     config_file = os.path.join(_settings_dir, "config.ini")
     if os.path.exists(config_file):
         try:
@@ -132,23 +169,13 @@ def main(prog_args=sys.argv[1:]):
         parents=[settings_parser],
         formatter_class=argparse.RawTextHelpFormatter,
         epilog='''Example usage:
-    record a single track/file: spotify-recorder -u user spotify:track:52xaypL0Kjzk0ngwv3oBPR
-    record entire playlist: spotify-recorder -u user spotify:user:username:playlist:4vkGNcsS8lRXj4q945NIA4
-    record entire album: spotify-recorder -u user spotify:user:username:album:29tvPtFTZwxZZMIA34BjYm
-    record a list of URIs contained in a file: spotify-recorder -u user list_of_uris.txt
-    record tracks from Spotify's charts: spotify-recorder -l spotify:charts:regional:global:weekly:latest
+    record a single track/file (PCM IEEE float with "wav" format/extension in current directory): spotify-recorder spotify:track:52xaypL0Kjzk0ngwv3oBPR
+    record a single track/file (FLAC encoded with "flac" format/extension in current directory): spotify-recorder -e "flac" spotify:track:52xaypL0Kjzk0ngwv3oBPR
+    record a single track/file (OPUS encoded with "opus" format/extension in current directory): spotify-recorder -e "opus"  spotify:track:52xaypL0Kjzk0ngwv3oBPR
+    record entire playlist: spotify-recorder spotify:user:username:playlist:4vkGNcsS8lRXj4q945NIA4
+    record entire album: spotify-recorder spotify:user:username:album:29tvPtFTZwxZZMIA34BjYm
+    record a list of URIs contained in a file: spotify-recorder list_of_uris.txt
     ''')
-
-    # create group to prevent user from using both the -l and -u option
-    is_user_set = defaults.get('user') is not None
-    is_last_set = defaults.get('last') is True
-    if is_user_set or is_last_set:
-        if is_user_set and is_last_set:
-            print("spotify-recorder: error: one of the arguments -u/--user -l/--last is required")
-            sys.exit(1)
-        else: group = parser.add_mutually_exclusive_group(required=False)
-    else: group = parser.add_mutually_exclusive_group(required=True)
-
     encoding_group = parser.add_mutually_exclusive_group(required=False)
 
     # set defaults
@@ -156,7 +183,6 @@ def main(prog_args=sys.argv[1:]):
 
     try: prog_version = pkg_resources.require("spotify-recorder")[0].version
     except (pkg_resources.DistributionNotFound) as err: prog_version = "1.0"
-
     parser.add_argument('--ascii', action='store_true', default=False,
         help='Convert the file name and the metadata tags to ASCII encoding [Default=utf-8]')
     parser.add_argument('--all-artists', action='store_true',
@@ -169,42 +195,23 @@ def main(prog_args=sys.argv[1:]):
              'passing a Spotify artist URI. You may get duplicate albums if not set. [Default=any]')
     parser.add_argument('--ascii-path-only', action='store_true',
         help='Convert the file name (but not the metadata tags) to ASCII encoding [Default=utf-8]')
-    '''
-    bitrate_group = parser.add_mutually_exclusive_group(required=False)
-    bitrate_group.add_argument('-b', nargs='?', type=int, metavar='BITRATE',
-        help='Bitrate for Constant Bit Rate (CBR) encoding (mutually exclusive with -q)')
-    #parser_vbr = subparser.add_parser('--vbr', help='a help')
-    bitrate_group.add_argument('-q', nargs='?', type=int, metavar='QUALITY',
-        help='Quality for Variable Bit Rate (VBR) encoding (mutually exclusive with -b)\n'
-        'Default use of VBR/CBR and default values for BITRATE/QUALITY are encoder dependent')
-
-    parser.add_argument('-o', '--output', choices=["mka", "flv", "m4a", "ogg", "webm", "pcm"], 
-        help='Audio file output (container) format/extension [Default dependens on encoder]')
-    parser.add_argument('--comp',
-        help='compression complexity for FLAC and Opus [Default=Max]')
-    '''
-
     parser.add_argument('-d', '--directory',
         help='Base directory where recorded files are saved [Default=cwd]')
-    parser.add_argument('-e','--encode', nargs='+', default=[], action='store', choices=codec_list,
-        help='List of audio encoders to be used for post-processing the recorded tracks.')
-    '''
-    def encoderArg(s):
-        for codec in codec_list:
-            prefix = codec + ":"
-            if s.startsWith(prefix): return str(s)
-        return None
-    '''
-    parser.choices = codec_list
-    parser.add_argument('--codec_args', nargs='+', action = keyvalue,
-        help='List of audio encoder arguments to be used for ffmpeg') #, type=encoderArg
-    parser.add_argument('--codec_containers', nargs='+', action = keyvalue,
-        help='List of audio containers to use for each codec') #, type=encoderArg
-
+    parser.add_argument('-e','--encode', nargs=1, action=keylist, default=['pcm'], dest="codecs", 
+        help='String containing one or a comma separated list of audio encoders to be used for post-processing the recorded tracks.'
+             '-e|--encode option can be used multiple times as is "-e flac -e aac"'
+              'Valid/supported codecs: flac, aac, opus, mp3, vorbis, ac3, pcm.')
+    parser.add_argument('--codec-args', nargs=1, action = keyvalue,
+        help='String in assignment form "<codec>=<codec-options>". Repeat --codec-args option for each codec as required.'
+             'Example: --codec-args "flac=-af aformat=s16:48000" , --codec-args "opus=-vbr off"') #, type=encoderArg
+    #parser.add_argument('--codec_args', nargs='+', action = keyvalue, help='List of audio encoder arguments to be used for ffmpeg') #, type=encoderArg
+    parser.add_argument('--format', nargs=1, action = keyvalue, dest="encoder_format",
+        help='String in assignment form "<codec>=<format>". Repeat --format option for each codec as required.'
+             'Example: --format "aac=m4a" , --format "opus=wbem"')
     parser.add_argument('--fail-log',
         help="Logs the list of track URIs that failed to record")
-    parser.add_argument('-f', '--filename', dest="filename", default="{album_artist}/{album}/{artist} - {track_name}.{ext}",
-        help='Save songs using this path/filename format (see README)')
+    parser.add_argument('-f', '--filename', dest="filename", default="{artist} - {track_name}.{ext}",
+        help='Save songs using a formatted path/filename specification (see README). Default: "{artist} - {track_name}.{ext}"')
     parser.add_argument('--filename-replace', nargs="+", required=False,
         help='pattern to replace the output filename separated by "/". '
              'The following example replaces all spaces with "_" and all "-" '
@@ -217,12 +224,9 @@ def main(prog_args=sys.argv[1:]):
         help='Attempt to retrieve genre information from Spotify\'s Web API [Default=skip]')
     encoding_group.add_argument('--id3-v23', action='store_true',
         help='Store ID3 tags using version v2.3 [Default=v2.4]')
-    group.add_argument('-u', '--user', help='Spotify username')
-    parser.add_argument('-p', '--password', help='Spotify password [Default=ask interactively]')
-#    parser.add_argument('--large-cover-art', action='store_true',
-#        help='Attempt to retrieve 640x640 cover art from Spotify\'s Web API [Default=300x300]')
-    group.add_argument('-l', '--last', action='store_true',
-        help='Use last login credentials')
+    parser.add_argument('-u', '--user', dest="user", default="", help='Spotify username, if not supplied use username from API or token cache')
+    #parser.add_argument('-p', '--password', help='Spotify password [Default=ask interactively]')
+    #parser.add_argument('-l', '--last', action='store_true', help='Use last login credentials')
     parser.add_argument('-L', '--log',
         help='Log in a log-friendly format to a file (use - to log to stdout)')
     parser.add_argument('--normalize', action='store_true',
@@ -231,9 +235,9 @@ def main(prog_args=sys.argv[1:]):
         help='Convert the file name to normalized ASCII with unicodedata.normalize (NFKD)')
     parser.add_argument('--partial-check', metavar="{none,weak,weak:<%>,strict}", type=partial_check_type, default="weak",
         help='Check for and overwrite partially recorded files. "weak" will '
-            'err on the side of not re-recording the file if it is unsure (up to 2% deviation), '
-            'whereas "strict" will re-record the file.  You can fine-tune the amount of deviation in % of reference audio playback length'
-            'for the "weak" check using "weak:<%s>" [Default=weak]')
+            'err on the side of not re-recording the file if it is unsure (up to 5%% deviation), '
+            'whereas "strict" will re-record the file.  You can fine-tune the amount of deviation in %% of reference audio playback length'
+            'for the "weak" check using "weak:<%%s>" [Default=weak]')
     parser.add_argument('--play-token-resume', metavar="RESUME_AFTER",
         help='If the \'play token\' is lost to a different device using '
             'the same Spotify account, the script will wait a speficied '
@@ -258,18 +262,7 @@ def main(prog_args=sys.argv[1:]):
             'cover-size="small|medium|large": size of covert art [default="large" (640x640)]'
             'grouping=<formatted text>: set grouping metadata tag to all songs. Can include same tags as --format.')
 
-    '''
-    parser.add_argument('--playlist-create', choices=['m3u', 'm3u:absolute', 'wpl'],
-        help='Create a m3u/wpl playlist file with relative paths by default')
-    parser.add_argument('--playlist-relative-path',
-        help='Relative path prefix (see README for path name formatting) to use for relative playlists [Default=relative path from current directory]')
-    parser.add_argument('--playlist-create-directory',
-        help='Creates the playlist file in another directory [Default=current directory]')
-    parser.add_argument('--playlist-create-from-directory',
-        help='Creates the playlist from all files in the source directory tree')
-    parser.add_argument('--playlist-sync', action='store_true',
-        help='Sync playlist songs (rename and remove old songs)')
-    '''
+    #parser.add_argument('--playlist-sync', action='store_true', help='Sync playlist songs (rename and remove old songs)')
     parser.add_argument('--remove-from-playlist', action='store_true',
         help='[WARNING: SPOTIFY IS NOT PROPROGATING PLAYLIST CHANGES TO '
              'THEIR SERVERS] Delete tracks from playlist after successful recording [Default=no]')
@@ -296,6 +289,7 @@ def main(prog_args=sys.argv[1:]):
     parser.add_argument('uri', nargs="*",
         help='Zero or more Spotify URI(s) (either URI, a file of URIs or a search query)')
     parser.set_defaults(**defaults)
+    #args, unknownargs = parser.parse_known_args(remaining_argv)
     args = parser.parse_args(remaining_argv)
 
     init_util_globals(args)

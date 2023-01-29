@@ -4,7 +4,7 @@ from __future__ import unicode_literals, print_function
 
 from colorama import Fore, Style
 from datetime import datetime, timedelta
-from lib.encode import encoder_default_container
+from lib.encode import encoder_default_format
 import mutagen
 import os, sys, errno
 import re, math
@@ -135,7 +135,7 @@ def change_file_extension(file_name, ext):
     return os.path.splitext(file_name)[0] + "." + ext
 
 def get_ext(args, codec):
-    return args.codec_containers[codec] if args.codec_containers and args.codec_containers[codec] else encoder_default_container[codec]
+    return args.encoder_format[codec] if args.encoder_format and args.encoder_format[codec] else encoder_default_format[codec]
 
 def get_track_name(track):
     name = track["name"].split("- ")
@@ -344,7 +344,7 @@ def is_partial(audio_file, track_duration_ms, alt_audio_file = None):
         if args.partial_check == "strict":
             return track_duration_ms > audio_file_duration_ms
         # for 'weak' the setting is 2% wiggle-room
-        wiggle_room = track_duration_ms * 0.02 if args.partial_check == "weak" \
+        wiggle_room = track_duration_ms * 0.05 if args.partial_check == "weak" \
             else float(args.partial_check.split(":")[1]) * track_duration_ms / 100
         _isPartial = (abs(track_duration_ms - audio_file_duration_ms) > wiggle_room) or audio_file_duration == 0
         if _isPartial:

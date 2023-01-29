@@ -16,16 +16,16 @@ SPOFITY_WEB_API_SCOPE = ' '.join([
     'playlist-read-collaborative',
     'playlist-modify-public',
     'playlist-modify-private',
-    #'user-follow-modify',
     'user-follow-read',
     'user-library-read',
     'user-read-private',
     'user-read-email',
-    #'user-library-modify',
-    #'user-top-read',
     'user-read-playback-state',
     'user-modify-playback-state',
-    'user-read-currently-playing',
+    'user-read-currently-playing'
+    #'user-library-modify',
+    #'user-top-read',
+    #'user-follow-modify',
 ])
 
 class WebAPI(object):
@@ -79,7 +79,7 @@ class WebAPI(object):
 
     def login(self, use_token_cache = True):
         if self.use_token_cache:
-            self.auth_manager = spotipy.oauth2.SpotifyOAuth(cache_handler=self.cache_handler)
+            self.auth_manager = spotipy.oauth2.SpotifyOAuth(cache_handler=self.cache_handler, scope=SPOFITY_WEB_API_SCOPE)
             self.token = self.auth_manager.get_access_token(check_cache=True)
             if not self.auth_manager.validate_token(self.token): 
                 self.token = self.auth_manager.refresh_access_token(self.token["refresh_token"])

@@ -61,6 +61,8 @@ class SportifyRecorder(threading.Thread):
         self.post = PostActions(args, self)
         self.web = WebAPI(args, self)
         self.user = self.web.get_user(None)
+        print(Fore.GREEN + 'Using user "' + Fore.CYAN + self.user['display_name'] + Fore.GREEN + '" with email "' + \
+            Fore.CYAN + self.user['email'] + Fore.GREEN + '"' + Fore.RESET)
         self.country = self.user["country"]
         self.audio_recorder = AudioRecorder(self, pyaudio.PyAudio(), recording_format[args.recording_format])
         
@@ -69,10 +71,40 @@ class SportifyRecorder(threading.Thread):
 
     def run(self):
         # Encoding and tagging thread function
-        def encode_and_tag(encoder, ext, output_file, audio_file, track_info, idx):
-            print(Fore.YELLOW + "Encoding " + Fore.CYAN + output_file + Fore.YELLOW + " (" + encoder + ")" + Fore.RESET)
-            encode(args, encoder, audio_file.replace(os.sep, '/'), output_file)
-            set_metadata_tags(self, output_file, idx, track_info, encoder, ext)
+        def encode_and_tag(codec, ext, output_file, audio_file, track_info, idx):
+            print(Fore.YELLOW + "Encoding " + Fore.CYAN + output_file + Fore.YELLOW + " (" + codec + ")" + Fore.RESET)
+            encode(args, codec, audio_file.replace(os.sep, '/'), output_file)
+            set_metadata_tags(self, output_file, idx, track_info, codec, ext)
+
+        def record_track(audio_file):
+            if not path_exists(audio_file) or is_partial(audio_file, track_duration_ms):
+                if args.recording == "skip":
+                    print(Fore.YELLOW + 'Missing or incomplete audio recording found, but recording set to "skip"' + Fore.RESET)
+                    _record_track = False
+                    self.post.log_failure(track_info)
+                    self.progress.skipped_tracks += 1
+                    return
+                try: 
+                    #os.remove(audio_file)
+                    os.rename(audio_file, audio_file + ".old") 
+                    print(Fore.YELLOW + 'Found incomplete raw recording from previous session - removing' + Fore.RESET)
+                except OSError: pass
+                sys.stdout.write(Fore.GREEN + '\nRecording Track "' + track_name + '" by "' +
+                    artist_name + '" (' + track_uri + ') ... ' + Fore.RESET)
+                # Start recording
+                self.audio_recorder.start_recording(audio_file)
+                if self.web.start_playback(uris=[track_uri]):
+                    self.audio_recorder.stop_recording(track_duration_ms / 1000.0)
+                    self.post.log_success(track_info) 
+                    print(Fore.GREEN + 'recording complete' + Fore.RESET)
+                else: # track can not be played
+                    self.audio_recorder.stop_recording(0)
+                    _encode_track = False
+                    self.post.log_failure(track_info)
+                    self.progress.skipped_tracks += 1
+                    print(Fore.RED + 'recording failed - track can not be played' + Fore.RESET)
+            else: 
+                print(Fore.GREEN + 'Complete raw recording found from a previous session - no new recording required' + Fore.RESET)
 
         args = self.args
         uris = args.uri        # list of spotify URIs
@@ -130,8 +162,8 @@ class SportifyRecorder(threading.Thread):
 
             try:
                 self.progress.increment_track_idx()                #self.check_stop_time()
-                record_track = True
-                encode_track = True  
+                _record_track = True
+                _encode_track = True  
                 track_name = get_track_name(track_info)
                 artist_name = get_track_artist(track_info)
                 if not track_name or not artist_name:
@@ -139,21 +171,22 @@ class SportifyRecorder(threading.Thread):
                     continue
 
                 audio_file = os.path.join(dir, artist_name + " - " + track_name + ".wav")  #dir.name
-                for encoder in args.encode:
+                for codec in args.codecs:
                     # Wait for all of them to finish
-                    ext = get_ext(self.args, encoder)
+                    ext = get_ext(self.args, codec)
                     output_file = self.format_track_path(idx, track_info, ext)
+                    alt_output_file = get_alternative_file(output_file, track_info, ext)
 
                     # before we skip or can fail loading the track
-                    if not args.overwrite and (path_exists(output_file) or path_exists(get_alternative_file(output_file, track_info, ext))):
+                    if not args.overwrite and (path_exists(output_file) or path_exists(alt_output_file)):
                         if is_partial(output_file, track_duration_ms, alt_output_file): 
-                            print(Fore.YELLOW + "\"" + encoder + "\" encoder: Partial encoding found - overwriting: " + Fore.CYAN + output_file + Fore.RESET)
+                            print(Fore.YELLOW + "\"" + codec + "\" encoder: Partial encoding found - overwriting: " + Fore.CYAN + output_file + Fore.RESET)
                             os.remove(output_file)
                         else:
-                            print(Fore.GREEN + "\"" + encoder + "\" encoder: Complete encoding found for " + Fore.CYAN + output_file + Fore.RESET)
+                            print(Fore.GREEN + 'Complete audio file found for "' + codec + '" encoder: ' + Fore.CYAN + output_file + Fore.RESET)
                             if args.tags["action"] == "update": # update id3v2 with metadata and embed front cover image
-                                set_metadata_tags(args, output_file, idx, track_info, self, encoder, ext)
-                            continue # next encoder
+                                set_metadata_tags(args, output_file, idx, track_info, self, codec, ext)
+                            continue # next codec
                     if args.search:
                         search_dir = format_track_string(self, args.search.strip(), idx, track_info, ext)
                         pattern = search_dir + '/**/' + os.path.basename(output_file)
@@ -165,40 +198,20 @@ class SportifyRecorder(threading.Thread):
                                 shutil.copy2(files[0].replace(os.sep, '/'), output_file, follow_symlinks=True)
                             continue
                         
-                    if record_track:
-                        if not path_exists(audio_file) or is_partial(audio_file, track_duration_ms):
-                            if args.recording == "skip":  continue  # We have a missing or incomplete file but can't record -> skip 
-                            try: 
-                                #os.remove(audio_file)
-                                os.rename(audio_file, audio_file + ".old") 
-                                print(Fore.YELLOW + 'Found incomplete raw recording from previous session - removing' + Fore.RESET)
-                            except OSError: pass
-                            sys.stdout.write(Fore.GREEN + '\nRecording Track "' + track_name + '" by "' +
-                                artist_name + '" (' + track_uri + ') ... ' + Fore.RESET)
-                            # Start recording
-                            self.audio_recorder.start_recording(audio_file)
-                            if self.web.start_playback(uris=[track_uri]):
-                                self.audio_recorder.stop_recording(track_duration_ms / 1000.0)
-                                self.post.log_success(track_info) 
-                                print(Fore.GREEN + 'recording complete' + Fore.RESET)
-                            else: # track can not be played
-                                self.audio_recorder.stop_recording(0)
-                                encode_track = False
-                                self.post.log_failure(track_info)
-                                print(Fore.RED + 'recording failed - track can not be played' + Fore.RESET)
-                        else: print(Fore.GREEN + 'Found complete raw recording from previous session - reusing' + Fore.RESET)
-                        record_track = False # No need to record more than once
+                    if _record_track:
+                        if args.recording == "skip":  continue  # We have a missing or incomplete file but can't record -> skip 
+                        record_track(audio_file)
+                        _record_track = False # No need to record more than once
 
-                    if encode_track:
-                        t = threading.Thread(target=encode_and_tag, args=(encoder, ext, output_file, audio_file, track_info, idx))
+                    if _encode_track:
+                        t = threading.Thread(target=encode_and_tag, args=(codec, ext, output_file, audio_file, track_info, idx))
                         threads.append(t)
                         t.start()
 
-                # Increment skipped tracks when no recording required for every single encoder
-                if record_track:
-                    msg = ' or missing raw recording with recording set to "skip"' if args.recording == "skip" else ''
-                    print(Fore.YELLOW + 'Skipping ' + track_uri + ' - complete audio files found for all encoders' + msg + Fore.RESET)
-                    self.progress.skipped_tracks += 1
+                # Increment skipped tracks when no recording required for every single encoder or record with encoding
+                if _record_track:
+                    record_track(audio_file)
+                    output_file = self.format_track_path(idx, track_info, ext)
 
                 # update id3v2 with metadata and embed front cover image
                 #set_metadata_tags(args, self.audio_file, idx, track, self)
@@ -230,8 +243,8 @@ class SportifyRecorder(threading.Thread):
 
         # Create playlists
         if args.playlist_create:
-            for encoder in args.encode:
-                self.post.create_playlist(track_info_list, get_ext(self.args, encoder))
+            for codec in args.codecs:
+                self.post.create_playlist(track_info_list, get_ext(self.args, codec))
 
         self.post.end_failure_log()
         self.post.print_summary()

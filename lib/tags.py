@@ -99,9 +99,7 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
     print(Fore.GREEN + Style.BRIGHT + os.path.basename(audio_file) + Style.NORMAL + "\t[ " +
           format_size(os.stat(enc_str(audio_file))[ST_SIZE]) + " ]" + Fore.RESET)
 
-    if ext == "wav":
-        print(Fore.YELLOW + "Skipping metadata tagging for PCM (WAV) encoding...")
-        return
+    #if ext == "wav": print(Fore.YELLOW + "Skipping metadata tagging for PCM (WAV) encoding..."); return
 
     # try to get genres from Spotify's Web API
     genres = None
@@ -302,6 +300,9 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
                     audio = mp4.MP4(audio_file)
             case "mp3":
                 audio = mp3.MP3(audio_file, ID3=id3.ID3)
+                set_id3_tags(audio)
+            case "wav":
+                audio = mutagen.wave.WAVE(audio_file)
                 set_id3_tags(audio)
 
         def bit_rate_str(bit_rate):

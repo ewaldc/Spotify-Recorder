@@ -4,7 +4,7 @@ from __future__ import unicode_literals, print_function
 from colorama import Fore, Style
 import os, subprocess, shlex, shutil
 
-encoder_default_container = {
+encoder_default_format = {
     "flac":"flac", "aac":"m4a", "opus":"opus", "mp3":"mp3", "vorbis":"ogg", "ac3":"ac3", "pcm":"wav"
 }
 encoder_default_args = {
@@ -19,7 +19,7 @@ encoder_default_args = {
 
 def encode(args, codec, input_file, output_file):
     def get_ext():
-        return args.codec_containers[codec] if args.codec_containers and args.codec_containers[codec] else encoder_default_container[codec]
+        return args.encoder_format[codec] if args.encoder_format and args.encoder_format[codec] else encoder_default_format[codec]
 
     try: encoder_args = args.codec_args[codec]
     except: encoder_args = encoder_default_args[codec]
