@@ -21,7 +21,7 @@ A Spotify developer account and premium account is required for overall operatio
 
 # Simplified installation on Windows
 1. Create or select a folder where you want to install Spotify-Recorder
-2. Download [Spotify-Recorder](../blob/master/releases/spotify-recorder_1.0.zip) and unzip
+2. Download [Spotify-Recorder](releases/spotify-recorder_1.0.zip) and unzip
 3. Set up a [Spotify Developer account](https://developer.spotify.com/console/). ``http://example.com/`` is a potential redirect URL.
 4. Save your Spotify API credentials in a file with name `.env`:
 ```
@@ -40,10 +40,10 @@ ffmpeg -formats
 ```
 
 #  Advanced Installations
-[Advanced installations](../blob/master/README_advanced.md) allow you to install from source, perform portable installations and build your own custom executable.
+[Advanced installations](README_advanced.md) allow you to install from source, perform portable installations and build your own custom executable.
 
 # Manual Page and Usage
-spotify-recorder is a command line tool that takes many [command-line options](../blob/master/README_manpage.md).  
+spotify-recorder is a command line tool that takes many [command-line options](README_manpage.md).  
 
 # Getting started - examples
 | Command                                       | Description                                                               |
@@ -61,4 +61,4 @@ spotify-recorder is a command line tool that takes many [command-line options](.
 
 The format string dictates how ``Spotify-Recorder`` will organize your recorded files.  This is controlled through the ``-f | --filename`` option.  The string should include the format of the file name and optionally a directory structure.   If you do not include a format string, the default format will be used: ``{album_artist}/{album}/{artist} - {track_name}.{ext}``.
 
-The detailed formatting rules can be found [here](../blob/master/README_formatting.md)
+The detailed formatting rules can be found [here](README_formatting.md)
