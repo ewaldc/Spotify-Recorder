@@ -3,8 +3,8 @@ spotify-recorder is a command line tool only that takes many [command-line optio
 
 ```
 spotify-recorder [-h] [-S SETTINGS] [--ascii] [--all-artists] [--artist-album-type ARTIST_ALBUM_TYPE]
-                 [--artist-album-market ARTIST_ALBUM_MARKET] [--ascii-path-only] [-d DIRECTORY] [-e CODECS] [--codec-args CODEC_ARGS]
-                 [--format ENCODER_FORMAT] [--fail-log FAIL_LOG] [-f FILENAME]
+                 [--artist-album-market ARTIST_ALBUM_MARKET] [--ascii-path-only] [-d DIRECTORY] [--debug]
+                 [-e CODECS] [--codec-args CODEC_ARGS] [--format ENCODER_FORMAT] [--fail-log FAIL_LOG] [-f FILENAME]
                  [--filename-replace FILENAME_REPLACE [FILENAME_REPLACE ...]] [--filename-windows-safe]
                  [--format-case {upper,lower,capitalize}] [-g {artist,album}] [--id3-v23] [-u USER] [-p PASSWORD] [-l] [-L LOG]
                  [--normalize] [-na] [--partial-check {none,weak,weak:<%>,strict}] [--play-token-resume RESUME_AFTER] [--playlist]
@@ -29,6 +29,7 @@ options:
   --ascii-path-only     Convert the file name (but not the metadata tags) to ASCII encoding [Default=utf-8]
   -d DIRECTORY, --directory DIRECTORY
                         Base directory where recorded files are saved [Default=cwd]
+  --debug               Add diagnostic messages (Spotify API, device/audio issues)
   -e CODECS, --encode CODECS
                         String containing one or a comma separated list of audio encoders to be used for post-processing the recorded tracks.-e|--encode option can be used multiple times as is "-e flac -e aac"Valid/supported codecs: flac, aac, opus, mp3, vorbis, ac3, pcm.
   --codec-args CODEC_ARGS
