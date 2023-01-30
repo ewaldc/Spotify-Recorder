@@ -49,7 +49,7 @@ ffmpeg -formats
 1. Open the Spotify Windows Player application
 2. Open a terminal window in your Spotify-Recorder directory
 3. Run the Spotify-Recorder command as desired.  Spotify-Recorder will discover and control the Spotify Player via the API.  There is no need to start/stop/pause anything on the Spotify Player app, but it's OK to use the app to search music etc.
-4. You can interrupt Spotify-Recorder using the keyboard (e.g. <ctrl>C).  In that case, you may want to manually stop the current playing song on the Spotify Player app.
+4. You can interrupt Spotify-Recorder using the keyboard (e.g. ``<ctrl>C``).  In that case, you may want to manually stop the current playing song on the Spotify Player app.
 
 
 #  Advanced Installations
