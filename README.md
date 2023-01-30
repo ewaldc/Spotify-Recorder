@@ -38,6 +38,19 @@ ffmpeg -formats
 # Is Spotify-Recorder properly installed and working?
 .\spotify-recorder.exe -h
 ```
+7. Configure your audio playback/recording devices
+* Make sure you have a default playback device
+* Set it to DVD or Studio quality: 2-channel, 16 or 24 bits, 48000 Hz sample rate
+* Disable audio enhancements (recommended)
+
+8. If you are running Anti-virus software, allow/enable microphone access
+
+# Recording with Spotify-Recorder on Windows
+1. Open the Spotify Windows Player application
+2. Open a terminal window in your Spotify-Recorder directory
+3. Run the Spotify-Recorder command as desired.  Spotify-Recorder will discover and control the Spotify Player via the API.  There is no need to start/stop/pause anything on the Spotify Player app, but it's OK to use the app to search music etc.
+4. You can interrupt Spotify-Recorder using the keyboard (e.g. <ctrl>C).  In that case, you may want to manually stop the current playing song on the Spotify Player app.
+
 
 #  Advanced Installations
 [Advanced installations](README_advanced.md) allow you to install from source, perform portable installations and build your own custom executable.

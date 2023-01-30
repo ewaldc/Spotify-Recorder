@@ -61,7 +61,8 @@ class SportifyRecorder(threading.Thread):
         self.post = PostActions(args, self)
         self.web = WebAPI(args, self)
         self.user = self.web.get_user(None)
-        print(Fore.GREEN + 'Using user "' + Fore.CYAN + self.user['display_name'] + Fore.GREEN + '" with email "' + \
+        if args.debug:
+            print(Fore.MAGENTA + 'Using user "' + Fore.CYAN + self.user['display_name'] + Fore.MAGENTA + '" with email "' + \
             Fore.CYAN + self.user['email'] + Fore.GREEN + '"' + Fore.RESET)
         self.country = self.user["country"]
         self.audio_recorder = AudioRecorder(self, pyaudio.PyAudio(), recording_format[args.recording_format])
@@ -211,7 +212,6 @@ class SportifyRecorder(threading.Thread):
                 # Increment skipped tracks when no recording required for every single encoder or record with encoding
                 if _record_track:
                     record_track(audio_file)
-                    output_file = self.format_track_path(idx, track_info, ext)
 
                 # update id3v2 with metadata and embed front cover image
                 #set_metadata_tags(args, self.audio_file, idx, track, self)

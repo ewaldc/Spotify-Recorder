@@ -67,8 +67,13 @@ class WebAPI(object):
         #devices = self.get_devices()
         is_none(devices)
         #for device in self.get_devices()["devices"]: #self.spotify.devices():
+        if args.debug: print(Fore.MAGENTA + "Parsing the list of Spotify devices" + Fore.RESET)
         for device in devices["devices"]: #self.spotify.devices():
-            if device["name"] == system_name: self.device_id = device["id"]; break
+            if args.debug: print(Fore.MAGENTA + "Device name - type - id: " + device["name"] + \
+                " - " + device["type"] + " - " + device["id"] + Fore.RESET)
+            if device["name"] == system_name: 
+                if args.debug: print(Fore.MAGENTA + "Device matches system name --> select this device" + Fore.RESET)
+                self.device_id = device["id"]; break
         is_none(self.device_id)
         self.spotify.volume(100, device_id=self.device_id)
 

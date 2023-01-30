@@ -406,6 +406,16 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
                 print(Fore.YELLOW + "Writing Apple iTunes metadata - " + str(audio.info.codec) + Fore.RESET)
                 print("-" * 79)
 
+            case "wav":
+                print("Time: " + format_time(audio.info.length) + "\tWaveform Audio File (WAV) Format " +
+                    "\t[ " + bit_rate_str(audio.info.bitrate / 1000) + " @ " + str(audio.info.sample_rate) +
+                    " Hz - " + channel_str(audio.info.channels) + " ]")
+                print("-" * 79)
+                id3_version = "v%d.%d" % (audio.tags.version[0], audio.tags.version[1])
+                print("ID3 " + id3_version + ": " + str(len(audio.tags.values())) + " frames")
+                print(Fore.YELLOW + "Writing ID3 version " + id3_version + Fore.RESET)
+                print("-" * 79)
+
         '''
             case "alac.m4a":
                 bit_rate = ((audio.info.bits_per_sample * audio.info.sample_rate) * audio.info.channels)

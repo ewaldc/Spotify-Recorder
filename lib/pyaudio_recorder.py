@@ -10,21 +10,35 @@ import sys, shutil #,threading #, platform
 
 class AudioRecorder:
     def __init__(self, recorder, pa, format):
+ 
+        def search_device(name, device_list):
+            if _debug: print(Fore.MAGENTA + "Searching for a loopback device that matches the default output device" + Fore.RESET)
+            for device in device_list:
+                if _debug: print(Fore.MAGENTA + "Loopback device name - sample rate: " +  device["name"] + ' - ' + str(device['defaultSampleRate']) + Fore.RESET)
+                if name in device['name']: return device
+            return None
+ 
         #super().__init__()
         self.recorder = recorder
-        try: wasapi_info = pa.get_host_api_info_by_type(pyaudio.paWASAPI) # Get default WASAPI info
+        _debug = recorder.args.debug
+        try: 
+            if _debug: print(Fore.MAGENTA + "Scanning for WASAPI enabled audio devices" + Fore.RESET)
+            wasapi_info = pa.get_host_api_info_by_type(pyaudio.paWASAPI) # Get default WASAPI info
+            if _debug: print(Fore.MAGENTA + "Found " + str(wasapi_info["deviceCount"]) + ' WASAPI capable devices' + Fore.RESET)
         except OSError: sys.stdout.write(Fore.RED + 'WASAPI is not available on the system. Exiting... \n' + Fore.RESET); exit(1)
+        #device_list = pa.get_device_info_generator_by_host_api(host_api_type = pyaudio.paWASAPI)
         # Get default WASAPI speakers
-        #self.stream = None
+        if _debug: print(Fore.MAGENTA + "Searching for a loopback audio device" + Fore.RESET)
         device = pa.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
-        if not device["isLoopbackDevice"]:
-            def search_device(name, device_list):
-                for device in device_list:
-                    if name in device['name']: return device
-                return None
-            device = search_device(device["name"], pa.get_loopback_device_info_generator())
-            if device is None: sys.stdout.write(Fore.RED + 'No loopback output device found. Exiting... \n' + Fore.RESET); sys.exit(11)
+        if device is None:
+            sys.stdout.write(Fore.RED + 'No default output/playback device defined. Exiting... \n' + Fore.RESET); sys.exit(11)
+        if _debug: print(Fore.MAGENTA + "Default audio output/playback device found: " + device["name"] + Fore.RESET)
 
+        # Search for loopback device
+        device = search_device(device["name"], pa.get_loopback_device_info_generator())
+        if device is None: 
+            sys.stdout.write(Fore.RED + 'No loopback input device found that matches default output. Exiting... \n' + Fore.RESET); sys.exit(12)
+        if _debug: print(Fore.MAGENTA + "Selecting this device as Loopback device" + Fore.RESET)
         self.pa = pa
         self.device = device
         self.channels = device["maxInputChannels"]

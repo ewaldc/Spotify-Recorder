@@ -347,7 +347,7 @@ def is_partial(audio_file, track_duration_ms, alt_audio_file = None):
         wiggle_room = track_duration_ms * 0.05 if args.partial_check == "weak" \
             else float(args.partial_check.split(":")[1]) * track_duration_ms / 100
         _isPartial = (abs(track_duration_ms - audio_file_duration_ms) > wiggle_room) or audio_file_duration == 0
-        if _isPartial:
+        if _isPartial and args.debug:
             print(Fore.MAGENTA + 'Duration deviation encountered above threshold for audio file: ' + Fore.CYAN + file + Fore.RESET)
         return _isPartial
 
@@ -367,7 +367,8 @@ def is_partial(audio_file, track_duration_ms, alt_audio_file = None):
         if alt_audio_file:
             audio_file_duration, audio_file_duration_ms = get_audio_file_duration(alt_audio_file)
             if audio_file_duration_ms == 0: return True
-            print(Fore.MAGENTA + 'Renaming legacy audio file: ' + Fore.CYAN + alt_audio_file + Fore.YELLOW + ' to: ' + Fore.CYAN + audio_file + Fore.RESET)
+            if args.debug:
+                print(Fore.MAGENTA + 'Renaming legacy audio file: ' + Fore.CYAN + alt_audio_file + Fore.YELLOW + ' to: ' + Fore.CYAN + audio_file + Fore.RESET)
             os.rename(alt_audio_file, audio_file)
             return _is_partial(audio_file)
         return True

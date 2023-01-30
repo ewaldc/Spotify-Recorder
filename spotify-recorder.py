@@ -197,6 +197,8 @@ def main(prog_args=sys.argv[1:]):
         help='Convert the file name (but not the metadata tags) to ASCII encoding [Default=utf-8]')
     parser.add_argument('-d', '--directory',
         help='Base directory where recorded files are saved [Default=cwd]')
+    parser.add_argument('--debug', action='store_true',
+        help='Add diagnostic messages (Spotify API, device/audio issues) ')
     parser.add_argument('-e','--encode', nargs=1, action=keylist, default=['pcm'], dest="codecs", 
         help='String containing one or a comma separated list of audio encoders to be used for post-processing the recorded tracks.'
              '-e|--encode option can be used multiple times as is "-e flac -e aac"'
