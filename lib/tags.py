@@ -3,7 +3,7 @@
 from __future__ import unicode_literals
 
 from colorama import Fore, Style
-from mutagen import mp3, id3, flac, aiff, oggvorbis, oggopus, aac
+from mutagen import mp3, id3, flac, aiff, oggvorbis, oggopus, aac, wave
 from lib.encode import encoder_default_args
 from stat import ST_SIZE
 from lib.utils import *
@@ -80,6 +80,10 @@ def get_metadata_tags(recorder, audio_file, ext):
             case "mp3":
                 audio = mp3.MP3(audio_file, ID3=id3.ID3)
                 return get_id3_tags(audio)
+            case "wave":
+                audio = wave.WAVE(audio_file)
+                return get_id3_tags(audio)
+
     except Exception as e:
         print(Fore.RED + "\nCorrupt metadata for aufio file: " + Fore.CYAN + audio_file + Fore.RESET)
         print(str(e))
@@ -302,7 +306,7 @@ def set_metadata_tags(recorder, audio_file, idx, track, codec, ext):
                 audio = mp3.MP3(audio_file, ID3=id3.ID3)
                 set_id3_tags(audio)
             case "wav":
-                audio = mutagen.wave.WAVE(audio_file)
+                audio = wave.WAVE(audio_file)
                 set_id3_tags(audio)
 
         def bit_rate_str(bit_rate):

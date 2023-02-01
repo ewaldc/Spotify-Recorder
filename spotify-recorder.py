@@ -14,11 +14,11 @@ import schedule
 #import tty
 #import termios
 
-global codecs_choices, codecs_args_choices, format_choices
+global codecs_choices, codec_args_choices, format_choices
 global playlist_create_choices, playlist_create_type_choices, playlist_create_path_type_choices
 global tags_choices, tags_action_choices, tags_cover_size_choices, tags_defaults
 codecs_choices = ["flac", "aac", "opus", "mp3", "vorbis", "ac3", "pcm"]
-codecs_args_choices = codecs_choices
+codec_args_choices = codecs_choices
 format_choices = codecs_choices
 
 recording_format_list = ["PCM:8", "PCM:16", "PCM:24", "PCM:32", "IEEE_FLOAT"]
@@ -36,31 +36,42 @@ tags_defaults = {"action":"set", "cover":"embed", "cover-size":"large"}
 if sys.version_info >= (3, 0): import configparser as ConfigParser
 else: import ConfigParser
 
-# create a keyvalue class
+# create a kyelist/keyvalue class
 class keylist(argparse.Action):
     def __call__(self, parser, namespace, values, option_string = None):
-        if not getattr(namespace, self.dest): setattr(namespace, self.dest, [])  # Initialize at first occurance of argument
+        _attr = getattr(namespace, self.dest)
+        if not _attr: #or _attr == self.default: 
+            setattr(namespace, self.dest, [])  # Initialize at first occurance of argument
         _value_choices = globals().get(self.dest + '_choices')
         for value in values[0].split(','): 
             _value = value.lstrip()
-            if _value_choices is None or _value in _value_choices: getattr(namespace, self.dest).append(_value) # assign into dictionary
+            if _value_choices is None or _value in _value_choices: 
+                if _value in getattr(namespace, self.dest): raise argparse.ArgumentTypeError('Value "' + _value + '": duplicate option')
+                getattr(namespace, self.dest).append(_value) # assign into dictionary
             else: raise argparse.ArgumentTypeError('Value "' + _value + '" must be in ' + str(_value_choices))
+
+# Parse "option" string for key=value assignments
+def get_key_value(option, assignment):
+    _key_choices = globals().get(option + '_choices') # does a choices list exist for the key of this option ?
+    if not '=' in assignment: return None, None
+    _key, _value = assignment.split('=',1) # split it into key and value
+    _key = _key.lower(); _opt_key = _key.replace('-', "_")
+    if _key_choices is None or _key in _key_choices:
+        _value_choices = globals().get(option + "_" + _opt_key + '_choices')
+        if _value_choices is None or _value in _value_choices: return _opt_key, _value
+        else: raise argparse.ArgumentTypeError('Value "' + _value + '" must be in ' + str(_value_choices))
+    else: raise argparse.ArgumentTypeError('Key "' + _key + '" must be in ' + str(_key_choices))
+    return None, None
 
 class keyvalue(argparse.Action):
     def __call__(self, parser, namespace, values, option_string = None):
         if getattr(namespace, self.dest) is None: setattr(namespace, self.dest, dict())
-        _key_choices = globals().get(self.dest + '_choices')
+        #_key_choices = globals().get(self.dest + '_choices')
         for value in values: 
-            if not '=' in value: return
-            key, value = value.split('=',1) # split it into key and value
-            key = key.lower()
-            if _key_choices is None or key in _key_choices:
-                _value_choices = globals().get(self.dest + "_" + key.replace('-', "_") + '_choices')
-                if _value_choices is None or value in _value_choices:
-                    getattr(namespace, self.dest)[key] = value #'='  #.join(data)     # assign into dictionary
-                else: raise argparse.ArgumentTypeError('Value "' + value + '" must be in ' + str(_value_choices))
-            else: raise argparse.ArgumentTypeError('Key "' + key + '" must be in ' + str(_key_choices))
+            _key, _value = get_key_value(self.dest, value)
+            getattr(namespace, self.dest)[_key] = _value #'='  #.join(data)     # assign into dictionary
 
+'''
 class keyvaluelist(argparse.Action):
     def __call__(self, parser, namespace, values, option_string = None):
         setattr(namespace, self.dest, dict())
@@ -76,6 +87,7 @@ class keyvaluelist(argparse.Action):
                     getattr(namespace, self.dest)[key] = value #'='  #.join(data)     # assign into dictionary
                 else: raise argparse.ArgumentTypeError('Value "' + value + '" must be in ' + str(_value_choices))
             else: raise argparse.ArgumentTypeError('Key "' + key + '" must be in ' + str(_key_choices))
+'''
 
 def load_config(defaults):
     if not load_dotenv(): # load .env file in current directory
@@ -93,26 +105,30 @@ def load_config(defaults):
             config = ConfigParser.ConfigParser()
             config.read(config_file)
             if not config.has_section("main"): return defaults
-            config_items = dict(config.items("main"))
-            to_array_options = ["replace"]
+            _config_items = dict(config.items("main"))
+            _array_options = ["replace", "codecs"]
+            _dict_options = ["codec_args", "format", "playlist_create"]
 
             # coerce boolean and none types
-            config_items_new = {}
-            for _key in config_items:
-                item = config_items[_key]
+            _defaults = {}
+            for option in _config_items:
+                value = _config_items[option]
+                option = option.replace("-", "_")  # turn option string into python variable
 
-                u_key = _key.replace("-", "_")
-                if item == 'True': item = True
-                elif item == 'False': item = False
-                elif item == 'None': item = None
-                else: item = item.strip("'\"")
+                if value == 'True': value = True
+                elif value == 'False': value = False
+                elif value == 'None': value = None
+                else: value = value.strip("'\"");
 
                 # certain options need to be in array (nargs=+)
-                if u_key in to_array_options: item = [item]
-                config_items_new[u_key] = item
+                if option in _array_options: value = [value]
+                elif option in _dict_options:
+                    _key, _value = get_key_value(option, value)
+                    value = {_key :_value}
+                _defaults[option] = value 
 
             # overwrite any existing defaults
-            defaults.update(config_items_new)
+            defaults.update(_defaults)
         except ConfigParser.Error as e:
             print("\nError parsing config file: " + config_file)
             print(str(e))
@@ -155,6 +171,7 @@ def main(prog_args=sys.argv[1:]):
     # config file lives, we need to parse this argument before we parse
     # the rest of the arguments (which can overwrite the options in the
     # config file)
+
     settings_parser = argparse.ArgumentParser(add_help=False)
     settings_parser.add_argument('-S', '--settings',
         help='Path to settings, config and temp files directory [Default=~/.spotify-recorder]')
@@ -198,12 +215,12 @@ def main(prog_args=sys.argv[1:]):
     parser.add_argument('-d', '--directory',
         help='Base directory where recorded files are saved [Default=cwd]')
     parser.add_argument('--debug', action='store_true',
-        help='Add diagnostic messages (Spotify API, device/audio issues) ')
-    parser.add_argument('-e','--encode', nargs=1, action=keylist, default=['pcm'], dest="codecs", 
+        help='Add diagnostic messages (Spotify API, device/audio issues)')
+    parser.add_argument('-e','--encode', nargs=1, action=keylist, dest="codecs", 
         help='String containing one or a comma separated list of audio encoders to be used for post-processing the recorded tracks.'
              '-e|--encode option can be used multiple times as is "-e flac -e aac"'
               'Valid/supported codecs: flac, aac, opus, mp3, vorbis, ac3, pcm.')
-    parser.add_argument('--codec-args', nargs=1, action = keyvalue,
+    parser.add_argument('--codec-args', nargs=1, action=keyvalue,
         help='String in assignment form "<codec>=<codec-options>". Repeat --codec-args option for each codec as required.'
              'Example: --codec-args "flac=-af aformat=s16:48000" , --codec-args "opus=-vbr off"') #, type=encoderArg
     #parser.add_argument('--codec_args', nargs='+', action = keyvalue, help='List of audio encoder arguments to be used for ffmpeg') #, type=encoderArg
@@ -315,6 +332,7 @@ def main(prog_args=sys.argv[1:]):
     if args.ascii_path_only is True: args.ascii = True
 
     # Set defaults 
+    if args.codecs is None: args.codecs = ['PCM']
     def set_defaults(argument, choices, defaults):
         for choice in choices:
             if not argument.get(choice):

@@ -62,8 +62,7 @@ class SportifyRecorder(threading.Thread):
         self.web = WebAPI(args, self)
         self.user = self.web.get_user(None)
         if args.debug:
-            print(Fore.MAGENTA + 'Using user "' + Fore.CYAN + self.user['display_name'] + Fore.MAGENTA + '" with email "' + \
-            Fore.CYAN + self.user['email'] + Fore.GREEN + '"' + Fore.RESET)
+            print(Fore.MAGENTA + 'Using user "' + self.user['display_name'] + '" with email "' + self.user['email'] + '"' + Fore.RESET)
         self.country = self.user["country"]
         self.audio_recorder = AudioRecorder(self, pyaudio.PyAudio(), recording_format[args.recording_format])
         
