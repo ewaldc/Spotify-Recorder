@@ -1,10 +1,11 @@
 # Spotify-Recorder
 
-A replacement for ``spotify-ripper`` which is now  obsolete due to the sunset of the Spotify libraries (aka libspotify) for Windows/Linux.
+A replacement for ``spotify-ripper``, which is now obsolete due to the sunset of the Spotify libraries (aka libspotify) for Windows/Linux.
+A complement to [Soggfy](https://github.com/Rafiuth/Soggfy).
 Spotify-Recorder provides 5 main functions:
-- Plays and records tracks, albums or playlists from Spotify using loopback audio devices
-- Encodes the recorded audio in PCM (WAV) IEEE-FLOAT format by default and in multiple other formats (FLAC, AAC, OPUS, MP3, VORBIS, AC3) on request
-- Generates filenames for the encode audio based on formatting rules, with ability to execute character replacements
+- Automates the recording of tracks, albums or playlists using either [Soggfy](https://github.com/Rafiuth/Soggfy) or loopback audio devices
+- Encodes, if required, the recorded audio in PCM (WAV) IEEE-FLOAT format by default and in multiple other formats (FLAC, AAC, OPUS, MP3, VORBIS, AC3) or, in the case of Soggfy, copies the OGG/Vorbis recordings into desired (formatted) destination
+- Generates filenames for the encoded audio based on formatting rules, with ability to execute character replacements
 - Sets metadata tags on the encoded audio files
 - Generates relative or absolute playlists of existing or generated audio files e.g. for import on Android
 
@@ -38,15 +39,16 @@ ffmpeg -formats
 # Is Spotify-Recorder properly installed and working?
 .\spotify-recorder.exe -h
 ```
-7. Configure your audio playback/recording devices
+7. Configure Soggfy (preferred) or audio playback/recording devices
 * Make sure you have a default playback device
-* Set it to DVD or Studio quality: 2-channel, 16 or 24 bits, 48000 Hz sample rate
+* Set it to DVD or Studio quality: 2-channel, 16 or 24 bits, 44100 Hz sample rate
 * Disable audio enhancements (recommended)
+* For Soggfy: use playback speed of 1 (see sample Soggfy config file)
 
 8. If you are running Anti-virus software, allow/enable microphone access
 
 # Recording with Spotify-Recorder on Windows
-1. Open the Spotify Windows Player application
+1. Open the Spotify Windows Player application (use \"injector.exe\" for Soggfy)
 2. Open a terminal window in your Spotify-Recorder directory
 3. Run the Spotify-Recorder command as desired.  Spotify-Recorder will discover and control the Spotify Player via the API.  There is no need to start/stop/pause anything on the Spotify Player app, but it's OK to use the app to search music etc.
 4. You can interrupt Spotify-Recorder using the keyboard (e.g. ``<ctrl>C``).  In that case, you may want to manually stop the current playing song on the Spotify Player app.
